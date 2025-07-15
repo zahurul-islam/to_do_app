@@ -1,0 +1,33 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - echo "No pre-build steps needed for static HTML/JS app"
+    build:
+      commands:
+        - echo "Building the frontend application"
+        - echo "Updating frontend configuration with Terraform outputs"
+        # The actual configuration will be injected via environment variables
+        - |
+          if [ -n "$REACT_APP_USER_POOL_ID" ]; then
+            sed -i "s/userPoolId: '[^']*'/userPoolId: '$REACT_APP_USER_POOL_ID'/g" frontend/app.js
+          fi
+        - |
+          if [ -n "$REACT_APP_USER_POOL_CLIENT" ]; then
+            sed -i "s/userPoolClientId: '[^']*'/userPoolClientId: '$REACT_APP_USER_POOL_CLIENT'/g" frontend/app.js
+          fi
+        - |
+          if [ -n "$REACT_APP_API_URL" ]; then
+            sed -i "s|apiGatewayUrl: '[^']*'|apiGatewayUrl: '$REACT_APP_API_URL'|g" frontend/app.js
+          fi
+        - echo "Frontend application built successfully"
+    postBuild:
+      commands:
+        - echo "Build completed successfully"
+  artifacts:
+    baseDirectory: frontend
+    files:
+      - '**/*'
+  cache:
+    paths: []

@@ -1,0 +1,10 @@
+regions:
+  - us-west-2
+  - global
+
+account-blocklist:
+  - "999999999999" # Protect production or important accounts
+
+accounts:
+  "YOUR_ACCOUNT_ID": {9487-6650-7067} # <-- Use your actual AWS Account ID here
+

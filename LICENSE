@@ -1,0 +1,69 @@
+MIT License
+
+Copyright (c) 2025 Serverless Todo Application
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+
+---
+
+## Additional Terms for Educational Use
+
+This project is designed as a capstone project demonstrating serverless 
+architecture and AWS cloud services. It is intended for:
+
+- Educational purposes
+- Portfolio demonstration
+- Learning cloud development
+- Understanding Infrastructure as Code
+- Practicing DevOps methodologies
+
+## Disclaimer
+
+This software is provided for educational and demonstration purposes. 
+While security best practices have been implemented, users should:
+
+- Review all security configurations before production use
+- Monitor AWS costs and usage
+- Follow AWS security best practices
+- Implement additional security measures as needed for production use
+- Regularly update dependencies and configurations
+
+## Third-Party Components
+
+This project uses several third-party components and services:
+
+- **AWS Services**: Amazon Web Services (various services)
+- **Terraform**: HashiCorp Terraform for Infrastructure as Code
+- **React**: Facebook's React library (via CDN)
+- **Tailwind CSS**: Utility-first CSS framework (via CDN)
+- **AWS SDK**: Amazon Web Services Software Development Kit
+
+Each component is subject to its own license terms.
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+For major changes, please open an issue first to discuss what you 
+would like to change.
+
+## Support
+
+This project is provided as-is for educational purposes. While effort
+has been made to ensure accuracy and functionality, no warranty is
+provided. Users are responsible for their own AWS costs and security.

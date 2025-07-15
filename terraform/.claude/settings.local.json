@@ -1,0 +1,11 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(terraform:*)",
+      "Bash(pip install:*)",
+      "Bash(source:*)",
+      "Bash(python test:*)"
+    ],
+    "deny": []
+  }
+}

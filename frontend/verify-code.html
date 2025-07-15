@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Verification - TaskFlow</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #1E293B;
+        }
+        
+        .container {
+            background: white;
+            padding: 2rem;
+            border-radius: 1rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            max-width: 500px;
+            width: 100%;
+            margin: 1rem;
+        }
+        
+        .header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .logo {
+            font-size: 2rem;
+            font-weight: 800;
+            color: #FF6B6B;
+            margin-bottom: 0.5rem;
+        }
+        
+        .title {
+            font-size: 1.5rem;
+            font-weight: 600;
+            color: #1E293B;
+            margin-bottom: 0.5rem;
+        }
+        
+        .subtitle {
+            color: #64748B;
+            font-size: 0.875rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        label {
+            display: block;
+            font-weight: 600;
+            color: #334155;
+            margin-bottom: 0.5rem;
+            font-size: 0.875rem;
+        }
+        
+        input {
+            width: 100%;
+            padding: 0.875rem 1rem;
+            border: 2px solid #E2E8F0;
+            border-radius: 0.75rem;
+            font-size: 0.875rem;
+            transition: border-color 0.15s ease;
+            background: white;
+        }
+        
+        input:focus {
+            outline: none;
+            border-color: #FF6B6B;
+            box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.1);
+        }
+        
+        .btn {
+            width: 100%;
+            padding: 0.875rem;
+            background: #FF6B6B;
+            color: white;
+            border: none;
+            border-radius: 0.75rem;
+            font-weight: 600;
+            font-size: 0.875rem;
+            cursor: pointer;
+            transition: background 0.15s ease;
+            margin-bottom: 1rem;
+        }
+        
+        .btn:hover {
+            background: #E55A5A;
+        }
+        
+        .btn:disabled {
+            background: #CBD5E1;
+            cursor: not-allowed;
+        }
+        
+        .btn-secondary {
+            background: #64748B;
+        }
+        
+        .btn-secondary:hover {
+            background: #475569;
+        }
+        
+        .message {
+            padding: 1rem;
+            border-radius: 0.75rem;
+            margin-bottom: 1rem;
+            font-size: 0.875rem;
+        }
+        
+        .success {
+            background: #DCFCE7;
+            color: #166534;
+            border: 1px solid #BBF7D0;
+        }
+        
+        .error {
+            background: #FEF2F2;
+            color: #DC2626;
+            border: 1px solid #FECACA;
+        }
+        
+        .info {
+            background: #EFF6FF;
+            color: #1D4ED8;
+            border: 1px solid #DBEAFE;
+        }
+        
+        .link-btn {
+            background: none;
+            border: none;
+            color: #FF6B6B;
+            text-decoration: underline;
+            cursor: pointer;
+            font-size: 0.875rem;
+            padding: 0;
+        }
+        
+        .instructions {
+            background: #F8FAFC;
+            padding: 1rem;
+            border-radius: 0.5rem;
+            border-left: 4px solid #FF6B6B;
+            margin-bottom: 1rem;
+        }
+        
+        .instructions h4 {
+            color: #1E293B;
+            margin-bottom: 0.5rem;
+        }
+        
+        .instructions p {
+            color: #64748B;
+            font-size: 0.875rem;
+            line-height: 1.5;
+        }
+        
+        .footer {
+            text-align: center;
+            margin-top: 2rem;
+            padding-top: 1rem;
+            border-top: 1px solid #E2E8F0;
+        }
+        
+        .footer a {
+            color: #FF6B6B;
+            text-decoration: none;
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="logo">✓ TaskFlow</div>
+            <div class="title">Email Verification</div>
+            <div class="subtitle">Enter your verification code to activate your account</div>
+        </div>
+
+        <!-- Instructions -->
+        <div class="instructions">
+            <h4>📧 Check Your Email</h4>
+            <p>We sent a 6-digit verification code to your email address. Enter the code below to verify your account.</p>
+        </div>
+
+        <!-- Verification Form -->
+        <div id="verificationForm">
+            <div class="form-group">
+                <label for="email">Email Address</label>
+                <input type="email" id="email" placeholder="Enter your email address" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="code">Verification Code</label>
+                <input type="text" id="code" placeholder="Enter 6-digit code" maxlength="6" pattern="[0-9]{6}" required>
+            </div>
+            
+            <button class="btn" id="verifyBtn" onclick="verifyCode()">Verify Email</button>
+            <button class="btn btn-secondary" id="resendBtn" onclick="resendCode()">Resend Code</button>
+        </div>
+
+        <!-- Message Area -->
+        <div id="messageArea"></div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <a href="https://ddbchpi65u1nc.cloudfront.net/">← Back to TaskFlow</a>
+        </div>
+    </div>
+
+    <!-- AWS SDK and Cognito -->
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1396.0.min.js"></script>
+    <script src="https://unpkg.com/amazon-cognito-identity-js@6.3.6/dist/amazon-cognito-identity.min.js"></script>
+
+    <script>
+        // AWS Configuration
+        const AWS_CONFIG = {
+            region: 'us-west-2',
+            userPoolId: 'us-west-2_3TgtLQamd',
+            userPoolClientId: '6i27nq388mi7hmto8ouanos04d'
+        };
+
+        // Initialize AWS
+        window.AWS.config.region = AWS_CONFIG.region;
+        const poolData = {
+            UserPoolId: AWS_CONFIG.userPoolId,
+            ClientId: AWS_CONFIG.userPoolClientId
+        };
+        const userPool = new window.AmazonCognitoIdentity.CognitoUserPool(poolData);
+
+        // Auto-populate email from URL parameter
+        window.addEventListener('load', () => {
+            const urlParams = new URLSearchParams(window.location.search);
+            const emailParam = urlParams.get('email');
+            if (emailParam) {
+                document.getElementById('email').value = emailParam;
+                showMessage(`Verification for: ${emailParam}`, 'info');
+            }
+        });
+
+        function showMessage(message, type = 'info') {
+            const messageArea = document.getElementById('messageArea');
+            messageArea.innerHTML = `<div class="message ${type}">${message}</div>`;
+        }
+
+        function setLoading(loading) {
+            const verifyBtn = document.getElementById('verifyBtn');
+            const resendBtn = document.getElementById('resendBtn');
+            verifyBtn.disabled = loading;
+            resendBtn.disabled = loading;
+            verifyBtn.textContent = loading ? 'Verifying...' : 'Verify Email';
+        }
+
+        async function verifyCode() {
+            const email = document.getElementById('email').value;
+            const code = document.getElementById('code').value;
+            
+            if (!email || !code) {
+                showMessage('Please enter both email and verification code.', 'error');
+                return;
+            }
+            
+            if (code.length !== 6 || !/^\d{6}$/.test(code)) {
+                showMessage('Verification code must be exactly 6 digits.', 'error');
+                return;
+            }
+            
+            setLoading(true);
+            showMessage('⏳ Verifying your code...', 'info');
+            
+            try {
+                const userData = {
+                    Username: email,
+                    Pool: userPool
+                };
+                
+                const cognitoUser = new window.AmazonCognitoIdentity.CognitoUser(userData);
+                
+                await new Promise((resolve, reject) => {
+                    cognitoUser.confirmRegistration(code, true, (err, result) => {
+                        if (err) {
+                            reject(err);
+                        } else {
+                            resolve(result);
+                        }
+                    });
+                });
+                
+                showMessage(`✅ Email verified successfully! You can now sign in with your credentials.`, 'success');
+                
+                // Show success actions
+                document.getElementById('verificationForm').innerHTML = `
+                    <div style="text-align: center; padding: 1rem;">
+                        <h3 style="color: #22C55E; margin-bottom: 1rem;">🎉 Account Verified!</h3>
+                        <p style="margin-bottom: 1rem; color: #64748B;">Your account has been successfully verified.</p>
+                        <a href="https://ddbchpi65u1nc.cloudfront.net/" style="
+                            display: inline-block;
+                            padding: 0.875rem 1.5rem;
+                            background: #FF6B6B;
+                            color: white;
+                            text-decoration: none;
+                            border-radius: 0.75rem;
+                            font-weight: 600;
+                        ">Sign In to TaskFlow</a>
+                    </div>
+                `;
+                
+            } catch (error) {
+                console.error('Verification error:', error);
+                let errorMessage = 'Verification failed. ';
+                
+                if (error.code === 'CodeMismatchException') {
+                    errorMessage += 'Invalid verification code. Please check the code and try again.';
+                } else if (error.code === 'ExpiredCodeException') {
+                    errorMessage += 'Verification code has expired. Please request a new code.';
+                } else if (error.code === 'UserNotFoundException') {
+                    errorMessage += 'User not found. Please check your email address.';
+                } else {
+                    errorMessage += error.message || 'Please try again.';
+                }
+                
+                showMessage(`❌ ${errorMessage}`, 'error');
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        async function resendCode() {
+            const email = document.getElementById('email').value;
+            
+            if (!email) {
+                showMessage('Please enter your email address first.', 'error');
+                return;
+            }
+            
+            setLoading(true);
+            showMessage('📧 Resending verification code...', 'info');
+            
+            try {
+                const userData = {
+                    Username: email,
+                    Pool: userPool
+                };
+                
+                const cognitoUser = new window.AmazonCognitoIdentity.CognitoUser(userData);
+                
+                await new Promise((resolve, reject) => {
+                    cognitoUser.resendConfirmationCode((err, result) => {
+                        if (err) {
+                            reject(err);
+                        } else {
+                            resolve(result);
+                        }
+                    });
+                });
+                
+                showMessage('✅ Verification code resent! Check your email (including spam folder).', 'success');
+                
+            } catch (error) {
+                console.error('Resend error:', error);
+                let errorMessage = 'Failed to resend code. ';
+                
+                if (error.code === 'UserNotFoundException') {
+                    errorMessage += 'User not found. Please check your email address.';
+                } else if (error.code === 'InvalidParameterException') {
+                    errorMessage += 'User is already confirmed.';
+                } else {
+                    errorMessage += error.message || 'Please try again.';
+                }
+                
+                showMessage(`❌ ${errorMessage}`, 'error');
+            } finally {
+                setLoading(false);
+            }
+        }
+
+        // Handle Enter key
+        document.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                verifyCode();
+            }
+        });
+    </script>
+</body>
+</html>
