@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Auth Test</title>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 2rem; }
+        .test { padding: 1rem; margin: 1rem 0; border-radius: 0.5rem; }
+        .pass { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .fail { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+    </style>
+</head>
+<body>
+    <h1>🧪 Streamlined Authentication Test</h1>
+    <div id="results"></div>
+    
+    <script>
+        async function runTests() {
+            const results = document.getElementById('results');
+            
+            function addResult(message, type = 'info') {
+                const div = document.createElement('div');
+                div.className = `test ${type}`;
+                div.textContent = message;
+                results.appendChild(div);
+            }
+            
+            // Test 1: Check if files exist
+            try {
+                const configResponse = await fetch('./config.json');
+                if (configResponse.ok) {
+                    addResult('✅ config.json is accessible', 'pass');
+                    const config = await configResponse.json();
+                    if (config.userPoolId && config.userPoolClientId) {
+                        addResult('✅ Required AWS configuration found', 'pass');
+                    } else {
+                        addResult('❌ Missing required AWS configuration', 'fail');
+                    }
+                } else {
+                    addResult('❌ config.json not found', 'fail');
+                }
+            } catch (error) {
+                addResult(`❌ Error loading config: ${error.message}`, 'fail');
+            }
+            
+            // Test 2: Check app-flowless.js
+            try {
+                const appResponse = await fetch('./app-flowless.js');
+                if (appResponse.ok) {
+                    addResult('✅ app-flowless.js is accessible', 'pass');
+                } else {
+                    addResult('❌ app-flowless.js not found', 'fail');
+                }
+            } catch (error) {
+                addResult(`❌ Error loading app-flowless.js: ${error.message}`, 'fail');
+            }
+            
+            // Test 3: Check React availability
+            setTimeout(() => {
+                if (typeof React !== 'undefined') {
+                    addResult('✅ React is loaded', 'pass');
+                } else {
+                    addResult('❌ React not found', 'fail');
+                }
+                
+                if (typeof ReactDOM !== 'undefined') {
+                    addResult('✅ ReactDOM is loaded', 'pass');
+                } else {
+                    addResult('❌ ReactDOM not found', 'fail');
+                }
+            }, 2000);
+        }
+        
+        // Load React for testing
+        const script1 = document.createElement('script');
+        script1.src = 'https://unpkg.com/react@18/umd/react.development.js';
+        script1.onload = () => {
+            const script2 = document.createElement('script');
+            script2.src = 'https://unpkg.com/react-dom@18/umd/react-dom.development.js';
+            script2.onload = runTests;
+            document.head.appendChild(script2);
+        };
+        document.head.appendChild(script1);
+    </script>
+</body>
+</html>

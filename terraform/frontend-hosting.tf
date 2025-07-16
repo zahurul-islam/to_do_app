@@ -67,7 +67,7 @@ resource "aws_s3_bucket_website_configuration" "frontend_bucket_website" {
 
 # CloudFront Origin Access Control
 resource "aws_cloudfront_origin_access_control" "frontend_oac" {
-  name                              = "${var.project_name}-frontend-oac"
+  name                              = "${var.project_name}-frontend-oac-${random_string.bucket_suffix.result}"
   description                       = "Origin Access Control for frontend bucket"
   origin_access_control_origin_type = "s3"
   signing_behavior                  = "always"
@@ -155,7 +155,7 @@ resource "aws_cloudfront_distribution" "frontend_distribution" {
   })
 }
 
-# Generate frontend configuration file
+# Generate frontend configuration file for flowless authentication
 resource "local_file" "frontend_config" {
   filename = "${path.module}/../frontend/config.json"
   content = jsonencode({
@@ -164,6 +164,12 @@ resource "local_file" "frontend_config" {
     userPoolClientId = aws_cognito_user_pool_client.main.id
     apiGatewayUrl    = aws_api_gateway_stage.todos_stage.invoke_url
   })
+
+  depends_on = [
+    aws_cognito_user_pool.main,
+    aws_cognito_user_pool_client.main,
+    aws_api_gateway_stage.todos_stage
+  ]
 }
 
 # Upload frontend files to S3

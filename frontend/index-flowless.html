@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaskFlow - Streamlined Authentication</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✅</text></svg>">
+    
+    <!-- Modern Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- React 18 -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- AWS SDK and Cognito -->
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1396.0.min.js"></script>
+    <script src="https://unpkg.com/amazon-cognito-identity-js@6.3.6/dist/amazon-cognito-identity.min.js"></script>
+    
+    <!-- Enhanced AWS Amplify Configuration Setup -->
+    <script>
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                console.log('🔍 Setting up streamlined AWS Amplify authentication...');
+                
+                window.aws_amplify = {
+                    Amplify: {
+                        configure: (config) => {
+                            console.log('✅ AWS Cognito configured with:', config);
+                            window.COGNITO_CONFIG = config.Auth;
+                            
+                            window.AWS.config.region = config.Auth.region;
+                            
+                            const poolData = {
+                                UserPoolId: config.Auth.userPoolId,
+                                ClientId: config.Auth.userPoolWebClientId
+                            };
+                            window.COGNITO_USER_POOL = new window.AmazonCognitoIdentity.CognitoUserPool(poolData);
+                            console.log('✅ Cognito User Pool initialized for streamlined auth');
+                        }
+                    },
+                    Auth: {
+                        currentAuthenticatedUser: () => {
+                            return new Promise((resolve, reject) => {
+                                const cognitoUser = window.COGNITO_USER_POOL.getCurrentUser();
+                                if (cognitoUser) {
+                                    cognitoUser.getSession((err, session) => {
+                                        if (err) {
+                                            reject(err);
+                                        } else if (session.isValid()) {
+                                            resolve(cognitoUser);
+                                        } else {
+                                            reject(new Error('Session invalid'));
+                                        }
+                                    });
+                                } else {
+                                    reject(new Error('No current user'));
+                                }
+                            });
+                        },
+                        signUp: (signUpData) => {
+                            return new Promise((resolve, reject) => {
+                                const { username, password, attributes } = signUpData;
+                                const attributeList = [];
+                                
+                                if (attributes && attributes.email) {
+                                    const emailAttr = new window.AmazonCognitoIdentity.CognitoUserAttribute({
+                                        Name: 'email',
+                                        Value: attributes.email
+                                    });
+                                    attributeList.push(emailAttr);
+                                }
+                                
+                                if (attributes && attributes.name) {
+                                    const nameAttr = new window.AmazonCognitoIdentity.CognitoUserAttribute({
+                                        Name: 'name',
+                                        Value: attributes.name
+                                    });
+                                    attributeList.push(nameAttr);
+                                }
+                                
+                                window.COGNITO_USER_POOL.signUp(username, password, attributeList, null, (err, result) => {
+                                    if (err) {
+                                        console.error('Signup error:', err);
+                                        reject(err);
+                                    } else {
+                                        console.log('Signup successful:', result);
+                                        resolve(result);
+                                    }
+                                });
+                            });
+                        },
+                        confirmSignUp: (username, confirmationCode) => {
+                            return new Promise((resolve, reject) => {
+                                const userData = {
+                                    Username: username,
+                                    Pool: window.COGNITO_USER_POOL
+                                };
+                                
+                                const cognitoUser = new window.AmazonCognitoIdentity.CognitoUser(userData);
+                                
+                                cognitoUser.confirmRegistration(confirmationCode, true, (err, result) => {
+                                    if (err) {
+                                        console.error('Confirmation error:', err);
+                                        reject(err);
+                                    } else {
+                                        console.log('Confirmation successful:', result);
+                                        resolve(result);
+                                    }
+                                });
+                            });
+                        },
+                        resendConfirmationCode: (username) => {
+                            return new Promise((resolve, reject) => {
+                                const userData = {
+                                    Username: username,
+                                    Pool: window.COGNITO_USER_POOL
+                                };
+                                
+                                const cognitoUser = new window.AmazonCognitoIdentity.CognitoUser(userData);
+                                
+                                cognitoUser.resendConfirmationCode((err, result) => {
+                                    if (err) {
+                                        console.error('Resend error:', err);
+                                        reject(err);
+                                    } else {
+                                        console.log('Resend successful:', result);
+                                        resolve(result);
+                                    }
+                                });
+                            });
+                        },
+                        signIn: (username, password) => {
+                            return new Promise((resolve, reject) => {
+                                const authenticationData = {
+                                    Username: username,
+                                    Password: password
+                                };
+                                
+                                const authenticationDetails = new window.AmazonCognitoIdentity.AuthenticationDetails(authenticationData);
+                                const userData = {
+                                    Username: username,
+                                    Pool: window.COGNITO_USER_POOL
+                                };
+                                
+                                const cognitoUser = new window.AmazonCognitoIdentity.CognitoUser(userData);
+                                
+                                cognitoUser.authenticateUser(authenticationDetails, {
+                                    onSuccess: (result) => {
+                                        console.log('Sign-in successful:', result);
+                                        resolve(cognitoUser);
+                                    },
+                                    onFailure: (err) => {
+                                        console.error('Sign-in error:', err);
+                                        reject(err);
+                                    }
+                                });
+                            });
+                        },
+                        signOut: () => {
+                            return new Promise((resolve) => {
+                                const cognitoUser = window.COGNITO_USER_POOL.getCurrentUser();
+                                if (cognitoUser) {
+                                    cognitoUser.signOut();
+                                    console.log('Sign-out successful');
+                                }
+                                resolve();
+                            });
+                        },
+                        currentSession: () => {
+                            return new Promise((resolve, reject) => {
+                                const cognitoUser = window.COGNITO_USER_POOL.getCurrentUser();
+                                if (cognitoUser) {
+                                    cognitoUser.getSession((err, session) => {
+                                        if (err) {
+                                            reject(err);
+                                        } else {
+                                            resolve(session);
+                                        }
+                                    });
+                                } else {
+                                    reject(new Error('No current user'));
+                                }
+                            });
+                        }
+                    }
+                };
+                console.log('✅ Enhanced AWS authentication interface ready');
+            }, 100);
+        });
+    </script>
+    
+    <style>
+        :root {
+            /* Modern Color Palette */
+            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --success-gradient: linear-gradient(135deg, #22C55E 0%, #16A34A 100%);
+            --error-gradient: linear-gradient(135deg, #ef4444 0%, #dc2626 100%);
+            
+            /* Neutral Colors */
+            --gray-50: #f8fafc;
+            --gray-100: #f1f5f9;
+            --gray-200: #e2e8f0;
+            --gray-300: #cbd5e1;
+            --gray-400: #94a3b8;
+            --gray-500: #64748b;
+            --gray-600: #475569;
+            --gray-700: #334155;
+            --gray-800: #1e293b;
+            --gray-900: #0f172a;
+            
+            /* Design System */
+            --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            
+            /* Shadows */
+            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+            
+            /* Transitions */
+            --transition-fast: 0.15s ease-out;
+            --transition-base: 0.2s ease-out;
+            
+            /* Border Radius */
+            --radius-md: 0.5rem;
+            --radius-lg: 0.75rem;
+            --radius-xl: 1rem;
+            --radius-2xl: 1.5rem;
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: var(--font-primary);
+            background: var(--gray-50);
+            min-height: 100vh;
+            color: var(--gray-900);
+            line-height: 1.6;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+        
+        .app-container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        
+        ::-webkit-scrollbar-track {
+            background: var(--gray-100);
+            border-radius: var(--radius-md);
+        }
+        
+        ::-webkit-scrollbar-thumb {
+            background: var(--gray-300);
+            border-radius: var(--radius-md);
+            transition: background var(--transition-fast);
+        }
+        
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--gray-400);
+        }
+        
+        /* Animations */
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        @keyframes slideInRight {
+            0% {
+                transform: translateX(100%);
+                opacity: 0;
+            }
+            100% {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes slideInUp {
+            0% {
+                transform: translateY(20px);
+                opacity: 0;
+            }
+            100% {
+                transform: translateY(0);
+                opacity: 1;
+            }
+        }
+        
+        @keyframes fadeIn {
+            0% { opacity: 0; }
+            100% { opacity: 1; }
+        }
+        
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+        
+        /* Loading States */
+        .loading-state {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: var(--gray-50);
+            animation: fadeIn var(--transition-base);
+        }
+        
+        .loading-content {
+            text-align: center;
+            animation: slideInUp var(--transition-base);
+        }
+        
+        .loading-spinner {
+            width: 60px;
+            height: 60px;
+            border: 4px solid var(--gray-200);
+            border-top: 4px solid;
+            border-image: var(--primary-gradient) 1;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 1.5rem;
+        }
+        
+        /* Enhanced Form Styles */
+        .form-input {
+            width: 100%;
+            padding: 1rem;
+            border: 2px solid var(--gray-200);
+            border-radius: var(--radius-xl);
+            font-size: 1rem;
+            font-family: inherit;
+            transition: all var(--transition-fast);
+            background: white;
+            color: var(--gray-900);
+        }
+        
+        .form-input:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+            background: white;
+        }
+        
+        .form-input::placeholder {
+            color: var(--gray-400);
+        }
+        
+        /* Enhanced Button Styles */
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            padding: 1rem 1.5rem;
+            border: none;
+            border-radius: var(--radius-xl);
+            font-weight: 600;
+            font-size: 1rem;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all var(--transition-fast);
+            text-decoration: none;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .btn:disabled {
+            cursor: not-allowed;
+            opacity: 0.6;
+        }
+        
+        .btn-primary {
+            background: var(--primary-gradient);
+            color: white;
+            box-shadow: var(--shadow-md);
+        }
+        
+        .btn-primary:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-xl);
+        }
+        
+        .btn-success {
+            background: var(--success-gradient);
+            color: white;
+            box-shadow: var(--shadow-md);
+        }
+        
+        .btn-success:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-xl);
+        }
+        
+        /* Message Styles */
+        .message {
+            padding: 1rem 1.5rem;
+            border-radius: var(--radius-xl);
+            font-weight: 500;
+            margin-bottom: 1.5rem;
+            animation: slideInUp var(--transition-base);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .message-error {
+            background: #fef2f2;
+            color: #dc2626;
+            border: 1px solid #fca5a5;
+        }
+        
+        .message-success {
+            background: #f0fdf4;
+            color: #16a34a;
+            border: 1px solid #bbf7d0;
+        }
+        
+        .message-info {
+            background: #f0f9ff;
+            color: #0369a1;
+            border: 1px solid #93c5fd;
+        }
+        
+        /* Card Styles */
+        .card {
+            background: white;
+            border-radius: var(--radius-2xl);
+            padding: 2rem;
+            box-shadow: var(--shadow-lg);
+            border: 1px solid var(--gray-200);
+            transition: all var(--transition-base);
+        }
+        
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-xl);
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .card {
+                padding: 1.5rem;
+                margin: 1rem;
+            }
+            
+            .btn {
+                padding: 0.75rem 1rem;
+                font-size: 0.875rem;
+            }
+        }
+        
+        /* Utility Classes */
+        .text-center { text-align: center; }
+        .flex { display: flex; }
+        .flex-col { flex-direction: column; }
+        .items-center { align-items: center; }
+        .justify-center { justify-content: center; }
+        .justify-between { justify-content: space-between; }
+        .gap-2 { gap: 0.5rem; }
+        .gap-4 { gap: 1rem; }
+        .mb-4 { margin-bottom: 1rem; }
+        .mb-6 { margin-bottom: 1.5rem; }
+        .p-4 { padding: 1rem; }
+        .rounded { border-radius: var(--radius-md); }
+        .rounded-xl { border-radius: var(--radius-xl); }
+        .shadow { box-shadow: var(--shadow-md); }
+        
+        /* Streamlined auth specific styles */
+        .auth-container {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--primary-gradient);
+            padding: 2rem;
+        }
+        
+        .auth-card {
+            background: white;
+            border-radius: var(--radius-2xl);
+            padding: 3rem;
+            box-shadow: var(--shadow-xl);
+            width: 100%;
+            max-width: 450px;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .auth-header {
+            text-align: center;
+            margin-bottom: 2rem;
+        }
+        
+        .auth-logo {
+            width: 80px;
+            height: 80px;
+            background: var(--primary-gradient);
+            border-radius: 1.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            fontSize: 2.5rem;
+            color: white;
+            margin: 0 auto 1.5rem;
+            box-shadow: 0 10px 15px -3px rgba(102, 126, 234, 0.3);
+        }
+        
+        .auth-title {
+            font-size: 2rem;
+            font-weight: 800;
+            color: var(--gray-800);
+            margin-bottom: 0.5rem;
+        }
+        
+        .auth-subtitle {
+            color: var(--gray-500);
+            font-size: 1rem;
+        }
+        
+        .form-group {
+            margin-bottom: 1.5rem;
+        }
+        
+        .form-label {
+            display: block;
+            font-size: 0.875rem;
+            font-weight: 600;
+            color: var(--gray-700);
+            margin-bottom: 0.5rem;
+        }
+        
+        .verification-input {
+            width: 100%;
+            padding: 1rem;
+            border: 2px solid var(--gray-200);
+            border-radius: var(--radius-xl);
+            font-size: 1.5rem;
+            text-align: center;
+            letter-spacing: 0.5rem;
+            font-family: monospace;
+        }
+        
+        .auth-switch {
+            text-align: center;
+            padding-top: 1.5rem;
+            border-top: 1px solid var(--gray-200);
+        }
+        
+        .auth-link {
+            background: none;
+            border: none;
+            color: #667eea;
+            font-size: 0.875rem;
+            font-weight: 600;
+            cursor: pointer;
+            text-decoration: underline;
+        }
+        
+        .auth-link:hover {
+            color: #4f46e5;
+        }
+    </style>
+</head>
+<body>
+    <div id="root">
+        <div class="loading-state">
+            <div class="loading-content">
+                <div class="loading-spinner"></div>
+                <h2 style="color: var(--gray-600); margin-bottom: 0.5rem;">TaskFlow</h2>
+                <p style="color: var(--gray-500);">Loading streamlined authentication...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- React 18 Application Mounting -->
+    <script type="module">
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                if (typeof React !== 'undefined' && typeof ReactDOM !== 'undefined' && ReactDOM.createRoot) {
+                    console.log('✅ React 18 detected, using createRoot for flowless auth');
+                    
+                    const script = document.createElement('script');
+                    script.src = './app-flowless.js';
+                    script.onload = () => {
+                        const container = document.getElementById('root');
+                        const root = ReactDOM.createRoot(container);
+                        
+                        if (window.FlowlessAuth) {
+                            root.render(React.createElement(window.FlowlessAuth));
+                            console.log('✅ Streamlined TaskFlow app mounted successfully');
+                        } else {
+                            console.error('❌ FlowlessAuth component not found');
+                            container.innerHTML = `
+                                <div class="loading-state">
+                                    <div class="loading-content">
+                                        <p style="color: #dc2626;">Failed to load streamlined authentication. Please refresh the page.</p>
+                                    </div>
+                                </div>
+                            `;
+                        }
+                    };
+                    script.onerror = () => {
+                        console.error('❌ Failed to load app-flowless.js');
+                        const container = document.getElementById('root');
+                        container.innerHTML = `
+                            <div class="loading-state">
+                                <div class="loading-content">
+                                    <p style="color: #dc2626;">Failed to load application files. Please check your connection.</p>
+                                </div>
+                            </div>
+                        `;
+                    };
+                    document.head.appendChild(script);
+                } else {
+                    console.error('❌ React 18 not available');
+                    document.getElementById('root').innerHTML = `
+                        <div class="loading-state">
+                            <div class="loading-content">
+                                <p style="color: #dc2626;">React 18 is required but not available.</p>
+                            </div>
+                        </div>
+                    `;
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

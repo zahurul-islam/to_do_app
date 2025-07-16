@@ -86,6 +86,9 @@ def get_todos(user_id, query_parameters):
         
         todos = response.get('Items', [])
         
+        # Convert backend data structure to frontend expected format
+        todos = [format_todo_for_frontend(todo) for todo in todos]
+        
         # Convert Decimal types to regular numbers for JSON serialization
         todos = convert_decimal_to_number(todos)
         
@@ -103,35 +106,38 @@ def create_todo(user_id, request_body):
     Create a new todo
     """
     try:
-        # Validate required fields
-        if 'task' not in request_body:
-            return create_error_response(400, 'Task is required')
+        # Validate required fields (frontend sends 'title', we store as 'task')
+        if 'title' not in request_body:
+            return create_error_response(400, 'Title is required')
         
-        # Create new todo item
-        todo_id = str(uuid.uuid4())
+        # Create new todo item with frontend structure mapped to backend
+        todo_id = request_body.get('id', str(uuid.uuid4()))
         todo_item = {
             'user_id': user_id,
             'id': todo_id,
-            'task': request_body['task'],
-            'status': request_body.get('status', 'pending'),
-            'created_at': datetime.utcnow().isoformat(),
+            'task': request_body['title'],  # Map frontend 'title' to backend 'task'
+            'category': request_body.get('category', 'other'),
+            'priority': request_body.get('priority', 'medium'),
+            'completed': request_body.get('completed', False),
+            'created_at': request_body.get('createdAt', datetime.utcnow().isoformat()),
             'updated_at': datetime.utcnow().isoformat()
         }
         
         # Add optional fields
         if 'description' in request_body:
             todo_item['description'] = request_body['description']
-        if 'due_date' in request_body:
-            todo_item['due_date'] = request_body['due_date']
+        if 'dueDate' in request_body:
+            todo_item['due_date'] = request_body['dueDate']
         
         # Save to DynamoDB
         table.put_item(Item=todo_item)
         
-        # Convert Decimal types for response
-        todo_item = convert_decimal_to_number(todo_item)
+        # Convert to frontend format and convert Decimal types for response
+        formatted_todo = format_todo_for_frontend(todo_item)
+        formatted_todo = convert_decimal_to_number(formatted_todo)
         
         return create_success_response({
-            'todo': todo_item,
+            'todo': formatted_todo,
             'message': 'Todo created successfully'
         }, 201)
     
@@ -155,7 +161,8 @@ def get_todo(user_id, todo_id):
         if 'Item' not in response:
             return create_error_response(404, 'Todo not found')
         
-        todo = convert_decimal_to_number(response['Item'])
+        todo = format_todo_for_frontend(response['Item'])
+        todo = convert_decimal_to_number(todo)
         
         return create_success_response({
             'todo': todo
@@ -187,28 +194,32 @@ def update_todo(user_id, todo_id, request_body):
             ':updated_at': datetime.utcnow().isoformat()
         }
         
-        # Add fields to update
-        if 'task' in request_body:
+        # Add fields to update (map frontend fields to backend)
+        if 'title' in request_body:
             update_expression += ", task = :task"
-            expression_attribute_values[':task'] = request_body['task']
+            expression_attribute_values[':task'] = request_body['title']
         
-        if 'status' in request_body:
-            update_expression += ", #status = :status"
-            expression_attribute_values[':status'] = request_body['status']
+        if 'completed' in request_body:
+            update_expression += ", completed = :completed"
+            expression_attribute_values[':completed'] = request_body['completed']
+        
+        if 'category' in request_body:
+            update_expression += ", category = :category"
+            expression_attribute_values[':category'] = request_body['category']
+        
+        if 'priority' in request_body:
+            update_expression += ", priority = :priority"
+            expression_attribute_values[':priority'] = request_body['priority']
         
         if 'description' in request_body:
             update_expression += ", description = :description"
             expression_attribute_values[':description'] = request_body['description']
         
-        if 'due_date' in request_body:
+        if 'dueDate' in request_body:
             update_expression += ", due_date = :due_date"
-            expression_attribute_values[':due_date'] = request_body['due_date']
+            expression_attribute_values[':due_date'] = request_body['dueDate']
         
         # Update the item
-        expression_attribute_names = {}
-        if 'status' in request_body:
-            expression_attribute_names['#status'] = 'status'
-        
         update_params = {
             'Key': {
                 'user_id': user_id,
@@ -219,12 +230,10 @@ def update_todo(user_id, todo_id, request_body):
             'ReturnValues': 'ALL_NEW'
         }
         
-        if expression_attribute_names:
-            update_params['ExpressionAttributeNames'] = expression_attribute_names
-        
         response = table.update_item(**update_params)
         
-        updated_todo = convert_decimal_to_number(response['Attributes'])
+        updated_todo = format_todo_for_frontend(response['Attributes'])
+        updated_todo = convert_decimal_to_number(updated_todo)
         
         return create_success_response({
             'todo': updated_todo,
@@ -266,6 +275,22 @@ def delete_todo(user_id, todo_id):
     except Exception as e:
         print(f"Error deleting todo: {str(e)}")
         return create_error_response(500, 'Error deleting todo')
+
+def format_todo_for_frontend(backend_todo):
+    """
+    Convert backend todo structure to frontend expected format
+    """
+    return {
+        'id': backend_todo.get('id'),
+        'title': backend_todo.get('task', ''),  # Map backend 'task' to frontend 'title'
+        'category': backend_todo.get('category', 'other'),
+        'priority': backend_todo.get('priority', 'medium'),
+        'completed': backend_todo.get('completed', False),
+        'createdAt': backend_todo.get('created_at', ''),
+        'updatedAt': backend_todo.get('updated_at', ''),
+        'description': backend_todo.get('description', ''),
+        'dueDate': backend_todo.get('due_date', '')
+    }
 
 def convert_decimal_to_number(obj):
     """

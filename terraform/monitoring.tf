@@ -203,7 +203,7 @@ resource "aws_sns_topic_subscription" "email_alerts" {
 
 # CloudWatch Log Groups with retention
 resource "aws_cloudwatch_log_group" "lambda_logs" {
-  name              = "/aws/lambda/${aws_lambda_function.todos_handler.function_name}"
+  name              = "/aws/lambda/${aws_lambda_function.todos_handler.function_name}-${random_string.suffix.result}"
   retention_in_days = 14
 
   tags = {
@@ -288,7 +288,7 @@ resource "aws_lambda_function" "todos_handler_with_xray" {
 
 # IAM Policy for X-Ray
 resource "aws_iam_policy" "lambda_xray_policy" {
-  name        = "todo-lambda-xray-policy"
+  name        = "todo-lambda-xray-policy-${random_string.suffix.result}"
   description = "Policy for Lambda to write to X-Ray"
 
   policy = jsonencode({
@@ -314,7 +314,7 @@ resource "aws_iam_role_policy_attachment" "lambda_xray_attach" {
 
 # CloudWatch Insights Queries
 resource "aws_cloudwatch_query_definition" "lambda_errors" {
-  name = "TodoApp/Lambda/Errors"
+  name = "TodoApp/Lambda/Errors-${random_string.suffix.result}"
 
   log_group_names = [
     aws_cloudwatch_log_group.lambda_logs.name
@@ -329,7 +329,7 @@ EOF
 }
 
 resource "aws_cloudwatch_query_definition" "slow_requests" {
-  name = "TodoApp/Lambda/SlowRequests"
+  name = "TodoApp/Lambda/SlowRequests-${random_string.suffix.result}"
 
   log_group_names = [
     aws_cloudwatch_log_group.lambda_logs.name
@@ -347,7 +347,7 @@ EOF
 
 # Cost monitoring alarm
 resource "aws_budgets_budget" "todo_app_budget" {
-  name         = "todo-app-budget-${var.environment}"
+  name         = "todo-app-budget-${var.environment}-${random_string.suffix.result}"
   budget_type  = "COST"
   limit_amount = "10"
   limit_unit   = "USD"

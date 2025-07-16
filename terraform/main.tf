@@ -48,13 +48,19 @@ resource "aws_dynamodb_table" "todos" {
   }
 }
 
-# Cognito User Pool is defined in cognito-enhanced.tf
+# Cognito User Pool is defined in cognito-enhanced.tf (using flowless configuration)
 
-# Cognito User Pool Client is defined in cognito-enhanced.tf
+# Cognito User Pool Client is defined in cognito-enhanced.tf (using flowless configuration)
 
 # IAM Role for Lambda
+resource "random_string" "suffix" {
+  length  = 8
+  special = false
+  upper   = false
+}
+
 resource "aws_iam_role" "lambda_role" {
-  name = "todo-lambda-role"
+  name = "todo-lambda-role-${random_string.suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -72,7 +78,7 @@ resource "aws_iam_role" "lambda_role" {
 
 # IAM Policy for Lambda to access DynamoDB
 resource "aws_iam_policy" "lambda_dynamodb_policy" {
-  name        = "todo-lambda-dynamodb-policy"
+  name        = "todo-lambda-dynamodb-policy-${random_string.suffix.result}"
   description = "Policy for Lambda to access DynamoDB"
 
   policy = jsonencode({

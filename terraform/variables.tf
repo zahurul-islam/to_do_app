@@ -92,4 +92,10 @@ variable "common_tags" {
     Environment = "dev"
     Owner       = "DevOps Team"
   }
+}# Add to variables.tf for flowless authentication support
+
+variable "enable_post_confirmation_trigger" {
+  description = "Enable post-confirmation Lambda trigger for user initialization"
+  type        = bool
+  default     = false
 }
