@@ -1,0 +1,64 @@
+digraph "TaskFlow - Serverless Todo Application Architecture" {
+	graph [bgcolor=white fontcolor="#2D3436" fontname="Sans-Serif" fontsize=45 label="TaskFlow - Serverless Todo Application Architecture" nodesep=1.0 pad=0.5 rankdir=TB ranksep=1.5 splines=ortho]
+	node [fillcolor=lightblue fixedsize=true fontcolor="#2D3436" fontname=Arial fontsize=14 height=1.4 imagescale=true labelloc=b shape=box style="rounded,filled" width=1.4]
+	edge [color="#7B8894"]
+	"3e6078d9590048c3ab54eb69d6b0069a" [label="End Users" height=1.9 image="/home/zahurul/Documents/work/playground/unsloth/unsloth/lib/python3.12/site-packages/resources/aws/general/users.png" shape=none]
+	subgraph "cluster_Frontend Layer" {
+		graph [bgcolor="#E5F5FD" fontname="Sans-Serif" fontsize=12 label="Frontend Layer" labeljust=l pencolor="#AEB6BE" rankdir=LR shape=box style=rounded]
+		dea69e3ed12a4af9887095df2a158f6f [label="CloudFront
+Distribution" height=2.3 image="/home/zahurul/Documents/work/playground/unsloth/unsloth/lib/python3.12/site-packages/resources/aws/network/cloudfront.png" shape=none]
+		cd22ab9f88c24ecbb962a27ab9ff2713 [label="S3 Bucket
+(Static Website)" height=2.3 image="/home/zahurul/Documents/work/playground/unsloth/unsloth/lib/python3.12/site-packages/resources/aws/storage/simple-storage-service-s3.png" shape=none]
+	}
+	subgraph "cluster_API Gateway" {
+		graph [bgcolor="#E5F5FD" fontname="Sans-Serif" fontsize=12 label="API Gateway" labeljust=l pencolor="#AEB6BE" rankdir=LR shape=box style=rounded]
+		"4bd50e8c72654e1d840305dcbefc9f56" [label="REST API
+/todos" height=2.3 image="/home/zahurul/Documents/work/playground/unsloth/unsloth/lib/python3.12/site-packages/resources/aws/network/api-gateway.png" shape=none]
+		d1e1bd7e86304a38a7df6ba8ac5bdc9c [label="AI Endpoint
+/ai/extract" height=2.3 image="/home/zahurul/Documents/work/playground/unsloth/unsloth/lib/python3.12/site-packages/resources/aws/network/api-gateway.png" shape=none]
+	}
+	subgraph cluster_Authentication {
+		graph [bgcolor="#E5F5FD" fontname="Sans-Serif" fontsize=12 label=Authentication labeljust=l pencolor="#AEB6BE" rankdir=LR shape=box style=rounded]
+		daa16d8cc488499090d0c7dc5f4a4120 [label="User Pool" height=1.9 image="/home/zahurul/Documents/work/playground/unsloth/unsloth/lib/python3.12/site-packages/resources/aws/security/cognito.png" shape=none]
+		"13d851f71a8c413292527edb6a03dea2" [label="Identity Pool" height=1.9 image="/home/zahurul/Documents/work/playground/unsloth/unsloth/lib/python3.12/site-packages/resources/aws/security/cognito.png" shape=none]
+	}
+	subgraph "cluster_Lambda Functions" {
+		graph [bgcolor="#E5F5FD" fontname="Sans-Serif" fontsize=12 label="Lambda Functions" labeljust=l pencolor="#AEB6BE" rankdir=LR shape=box style=rounded]
+		"3c47a6a90ca34d549f2eea32ebf97b8f" [label="Todo Handler
+(CRUD Operations)" height=2.3 image="/home/zahurul/Documents/work/playground/unsloth/unsloth/lib/python3.12/site-packages/resources/aws/compute/lambda.png" shape=none]
+		"65e32718eae1427bb7a193b3dabaa87c" [label="AI Extractor
+(Gemini/OpenAI)" height=2.3 image="/home/zahurul/Documents/work/playground/unsloth/unsloth/lib/python3.12/site-packages/resources/aws/compute/lambda.png" shape=none]
+		acd5d5e7d5684a05b53b5042fbe571eb [label="X-Ray Enabled
+Handler" height=2.3 image="/home/zahurul/Documents/work/playground/unsloth/unsloth/lib/python3.12/site-packages/resources/aws/compute/lambda.png" shape=none]
+	}
+	subgraph "cluster_Data Storage" {
+		graph [bgcolor="#E5F5FD" fontname="Sans-Serif" fontsize=12 label="Data Storage" labeljust=l pencolor="#AEB6BE" rankdir=LR shape=box style=rounded]
+		"61af95f8a6d44c598f92c9660f08426e" [label="Todos Table" height=1.9 image="/home/zahurul/Documents/work/playground/unsloth/unsloth/lib/python3.12/site-packages/resources/aws/database/dynamodb.png" shape=none]
+		"1017948bfb9a42bba618772121eec85e" [label="API Keys
+(Gemini/OpenAI)" height=2.3 image="/home/zahurul/Documents/work/playground/unsloth/unsloth/lib/python3.12/site-packages/resources/aws/security/secrets-manager.png" shape=none]
+	}
+	subgraph "cluster_Monitoring & Logging" {
+		graph [bgcolor="#E5F5FD" fontname="Sans-Serif" fontsize=12 label="Monitoring & Logging" labeljust=l pencolor="#AEB6BE" rankdir=LR shape=box style=rounded]
+		"7ec164bbc5af45bcad7e0ee7706a2727" [label="CloudWatch
+Logs" height=2.3 image="/home/zahurul/Documents/work/playground/unsloth/unsloth/lib/python3.12/site-packages/resources/aws/management/cloudwatch.png" shape=none]
+		"0a61ec12c18543ab8d2020c850817c1a" [label="CloudWatch
+Metrics" height=2.3 image="/home/zahurul/Documents/work/playground/unsloth/unsloth/lib/python3.12/site-packages/resources/aws/management/cloudwatch.png" shape=none]
+		"73c01e65da474625ad61d3b204152393" [label="CloudWatch
+Alarms" height=2.3 image="/home/zahurul/Documents/work/playground/unsloth/unsloth/lib/python3.12/site-packages/resources/aws/management/cloudwatch.png" shape=none]
+	}
+	"3e6078d9590048c3ab54eb69d6b0069a" -> dea69e3ed12a4af9887095df2a158f6f [label=HTTPS dir=forward fontcolor="#2D3436" fontname="Sans-Serif" fontsize=13 style=bold]
+	dea69e3ed12a4af9887095df2a158f6f -> cd22ab9f88c24ecbb962a27ab9ff2713 [label="Static Content" dir=forward fontcolor="#2D3436" fontname="Sans-Serif" fontsize=13]
+	"3e6078d9590048c3ab54eb69d6b0069a" -> "4bd50e8c72654e1d840305dcbefc9f56" [label="API Calls" dir=forward fontcolor="#2D3436" fontname="Sans-Serif" fontsize=13 style=dashed]
+	"3e6078d9590048c3ab54eb69d6b0069a" -> d1e1bd7e86304a38a7df6ba8ac5bdc9c [label="AI Requests" dir=forward fontcolor="#2D3436" fontname="Sans-Serif" fontsize=13 style=dashed]
+	"3e6078d9590048c3ab54eb69d6b0069a" -> daa16d8cc488499090d0c7dc5f4a4120 [label=Auth color=darkgreen dir=forward fontcolor="#2D3436" fontname="Sans-Serif" fontsize=13]
+	daa16d8cc488499090d0c7dc5f4a4120 -> "13d851f71a8c413292527edb6a03dea2" [color=darkgreen dir=forward fontcolor="#2D3436" fontname="Sans-Serif" fontsize=13]
+	"4bd50e8c72654e1d840305dcbefc9f56" -> "3c47a6a90ca34d549f2eea32ebf97b8f" [label=Invoke dir=forward fontcolor="#2D3436" fontname="Sans-Serif" fontsize=13]
+	d1e1bd7e86304a38a7df6ba8ac5bdc9c -> "65e32718eae1427bb7a193b3dabaa87c" [label=Invoke dir=forward fontcolor="#2D3436" fontname="Sans-Serif" fontsize=13]
+	"3c47a6a90ca34d549f2eea32ebf97b8f" -> "61af95f8a6d44c598f92c9660f08426e" [label="Read/Write" dir=forward fontcolor="#2D3436" fontname="Sans-Serif" fontsize=13]
+	acd5d5e7d5684a05b53b5042fbe571eb -> "61af95f8a6d44c598f92c9660f08426e" [label="Read/Write" dir=forward fontcolor="#2D3436" fontname="Sans-Serif" fontsize=13]
+	"65e32718eae1427bb7a193b3dabaa87c" -> "1017948bfb9a42bba618772121eec85e" [label="Get API Keys" dir=forward fontcolor="#2D3436" fontname="Sans-Serif" fontsize=13]
+	"3c47a6a90ca34d549f2eea32ebf97b8f" -> "7ec164bbc5af45bcad7e0ee7706a2727" [color=gray dir=forward fontcolor="#2D3436" fontname="Sans-Serif" fontsize=13 style=dotted]
+	"65e32718eae1427bb7a193b3dabaa87c" -> "7ec164bbc5af45bcad7e0ee7706a2727" [color=gray dir=forward fontcolor="#2D3436" fontname="Sans-Serif" fontsize=13 style=dotted]
+	"4bd50e8c72654e1d840305dcbefc9f56" -> "0a61ec12c18543ab8d2020c850817c1a" [color=gray dir=forward fontcolor="#2D3436" fontname="Sans-Serif" fontsize=13 style=dotted]
+	"61af95f8a6d44c598f92c9660f08426e" -> "73c01e65da474625ad61d3b204152393" [color=gray dir=forward fontcolor="#2D3436" fontname="Sans-Serif" fontsize=13 style=dotted]
+}

@@ -162,9 +162,13 @@ deploy_flowless_auth() {
     log_step "Deploying flowless authentication system with fixes..."
     
     # Apply the unified frontend files with authentication fixes
-    log_info "Applying unified flowless authentication files with Cognito fixes..."
+    log_info "Applying modern AI-powered authentication system with fixes..."
     
-    if [ -f "frontend/app-unified.js" ] && [ -f "frontend/index-unified.html" ]; then
+    if [ -f "frontend/app-modern.js" ] && [ -f "frontend/index-modern.html" ]; then
+        cp "frontend/app-modern.js" "frontend/app.js"
+        cp "frontend/index-modern.html" "frontend/index.html"
+        log_success "Applied modern AI-powered authentication system with enhanced error handling"
+    elif [ -f "frontend/app-unified.js" ] && [ -f "frontend/index-unified.html" ]; then
         cp "frontend/app-unified.js" "frontend/app.js"
         cp "frontend/index-unified.html" "frontend/index.html"
         log_success "Applied unified flowless authentication system with enhanced error handling"

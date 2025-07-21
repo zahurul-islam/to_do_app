@@ -1,0 +1,836 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TaskFlow AI - Next-Gen Todo Management</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🤖</text></svg>">
+    
+    <!-- Enhanced Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Space+Grotesk:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <!-- React 18 -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    
+    <!-- AWS Cognito -->
+    <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1396.0.min.js"></script>
+    <script src="https://unpkg.com/amazon-cognito-identity-js@6.3.6/dist/amazon-cognito-identity.min.js"></script>
+    
+    <!-- AWS Amplify Authentication Interface -->
+    <script>
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                console.log('🔍 Setting up AWS Cognito authentication...');
+                
+                window.aws_amplify = {
+                    Amplify: {
+                        configure: (config) => {
+                            console.log('✅ AWS Cognito configured');
+                            window.COGNITO_CONFIG = config.Auth;
+                            window.AWS.config.region = config.Auth.region;
+                            
+                            const poolData = {
+                                UserPoolId: config.Auth.userPoolId,
+                                ClientId: config.Auth.userPoolWebClientId
+                            };
+                            window.COGNITO_USER_POOL = new window.AmazonCognitoIdentity.CognitoUserPool(poolData);
+                            console.log('✅ Cognito User Pool initialized');
+                        }
+                    },
+                    Auth: {
+                        currentAuthenticatedUser: () => {
+                            return new Promise((resolve, reject) => {
+                                const cognitoUser = window.COGNITO_USER_POOL.getCurrentUser();
+                                if (cognitoUser) {
+                                    cognitoUser.getSession((err, session) => {
+                                        if (err || !session.isValid()) {
+                                            reject(err || new Error('Invalid session'));
+                                        } else {
+                                            resolve(cognitoUser);
+                                        }
+                                    });
+                                } else {
+                                    reject(new Error('No current user'));
+                                }
+                            });
+                        },
+                        signUp: (signUpData) => {
+                            return new Promise((resolve, reject) => {
+                                const { username, password, attributes } = signUpData;
+                                const attributeList = [];
+                                
+                                if (attributes?.email) {
+                                    attributeList.push(new window.AmazonCognitoIdentity.CognitoUserAttribute({
+                                        Name: 'email',
+                                        Value: attributes.email
+                                    }));
+                                }
+                                
+                                window.COGNITO_USER_POOL.signUp(username, password, attributeList, null, (err, result) => {
+                                    if (err) reject(err);
+                                    else resolve(result);
+                                });
+                            });
+                        },
+                        signIn: (username, password) => {
+                            return new Promise((resolve, reject) => {
+                                const authenticationDetails = new window.AmazonCognitoIdentity.AuthenticationDetails({
+                                    Username: username,
+                                    Password: password
+                                });
+                                
+                                const cognitoUser = new window.AmazonCognitoIdentity.CognitoUser({
+                                    Username: username,
+                                    Pool: window.COGNITO_USER_POOL
+                                });
+                                
+                                cognitoUser.authenticateUser(authenticationDetails, {
+                                    onSuccess: () => resolve(cognitoUser),
+                                    onFailure: reject
+                                });
+                            });
+                        },
+                        confirmSignUp: (username, code) => {
+                            return new Promise((resolve, reject) => {
+                                const cognitoUser = new window.AmazonCognitoIdentity.CognitoUser({
+                                    Username: username,
+                                    Pool: window.COGNITO_USER_POOL
+                                });
+                                
+                                cognitoUser.confirmRegistration(code, true, (err, result) => {
+                                    if (err) reject(err);
+                                    else resolve(result);
+                                });
+                            });
+                        },
+                        resendSignUp: (username) => {
+                            return new Promise((resolve, reject) => {
+                                const cognitoUser = new window.AmazonCognitoIdentity.CognitoUser({
+                                    Username: username,
+                                    Pool: window.COGNITO_USER_POOL
+                                });
+                                
+                                cognitoUser.resendConfirmationCode((err, result) => {
+                                    if (err) reject(err);
+                                    else resolve(result);
+                                });
+                            });
+                        },
+                        signOut: () => {
+                            return new Promise((resolve) => {
+                                const cognitoUser = window.COGNITO_USER_POOL.getCurrentUser();
+                                if (cognitoUser) {
+                                    cognitoUser.signOut();
+                                }
+                                resolve();
+                            });
+                        },
+                        currentSession: () => {
+                            return new Promise((resolve, reject) => {
+                                const cognitoUser = window.COGNITO_USER_POOL.getCurrentUser();
+                                if (cognitoUser) {
+                                    cognitoUser.getSession((err, session) => {
+                                        if (err) reject(err);
+                                        else resolve(session);
+                                    });
+                                } else {
+                                    reject(new Error('No current user'));
+                                }
+                            });
+                        }
+                    }
+                };
+                console.log('✅ AWS authentication interface ready');
+            }, 100);
+        });
+    </script>
+    
+    <style>
+        :root {
+            /* Modern Color Palette */
+            --primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            --primary-solid: #667eea;
+            --primary-dark: #5a67d8;
+            --secondary: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            --accent: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            --success: #10b981;
+            --warning: #f59e0b;
+            --error: #ef4444;
+            
+            /* Glassmorphism Colors */
+            --glass-bg: rgba(255, 255, 255, 0.25);
+            --glass-border: rgba(255, 255, 255, 0.18);
+            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            
+            /* Dark/Light Neutrals */
+            --bg-primary: #0f0f23;
+            --bg-secondary: #1a1a2e;
+            --bg-tertiary: #16213e;
+            --text-primary: #ffffff;
+            --text-secondary: #a0a9c0;
+            --text-muted: #6b7280;
+            
+            /* Spacing & Effects */
+            --radius: 16px;
+            --radius-lg: 24px;
+            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            --shadow-lg: 0 20px 25px -5px rgba(0, 0, 0, 0.1);
+            --shadow-xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+            
+            /* Animations */
+            --transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --bounce: cubic-bezier(0.68, -0.55, 0.265, 1.55);
+        }
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: var(--bg-primary);
+            background-image: 
+                radial-gradient(circle at 20% 50%, rgba(120, 119, 198, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 80% 20%, rgba(255, 119, 198, 0.3) 0%, transparent 50%),
+                radial-gradient(circle at 40% 80%, rgba(120, 219, 255, 0.3) 0%, transparent 50%);
+            min-height: 100vh;
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+        
+        /* Loading Animation */
+        @keyframes pulse {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.8; transform: scale(1.05); }
+        }
+        
+        @keyframes slideUp {
+            0% { opacity: 0; transform: translateY(20px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+        
+        @keyframes slideIn {
+            0% { opacity: 0; transform: translateX(-20px); }
+            100% { opacity: 1; transform: translateX(0); }
+        }
+        
+        @keyframes glow {
+            0%, 100% { box-shadow: 0 0 20px rgba(102, 126, 234, 0.3); }
+            50% { box-shadow: 0 0 40px rgba(102, 126, 234, 0.6); }
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        /* Glassmorphism Button */
+        .glass-button {
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            color: var(--text-primary);
+            padding: 12px 24px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .glass-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s;
+        }
+        
+        .glass-button:hover::before {
+            left: 100%;
+        }
+        
+        .glass-button:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--glass-shadow);
+        }
+        
+        /* App Container */
+        .app-container {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* Enhanced Header */
+        .app-header {
+            background: var(--glass-bg);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border-bottom: 1px solid var(--glass-border);
+            color: var(--text-primary);
+            padding: 1.5rem 0;
+            position: sticky;
+            top: 0;
+            z-index: 1000;
+            animation: slideUp 0.6s ease-out;
+        }
+        
+        .header-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 0 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        .header-logo {
+            width: 56px;
+            height: 56px;
+            background: var(--primary);
+            border-radius: var(--radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            color: white;
+            font-weight: 700;
+            animation: glow 3s ease-in-out infinite;
+        }
+        
+        .header-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 2rem;
+            font-weight: 800;
+            margin-bottom: 0.25rem;
+            background: var(--primary);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        .header-subtitle {
+            font-size: 0.875rem;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        
+        /* AI Extraction Panel */
+        .ai-panel {
+            background: var(--glass-bg);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: 2rem;
+            margin-bottom: 2rem;
+            animation: slideUp 0.6s ease-out 0.2s both;
+        }
+        
+        .ai-panel-header {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+        
+        .ai-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--accent);
+            border-radius: var(--radius);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            animation: pulse 2s infinite;
+        }
+        
+        .ai-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+        }
+        
+        .ai-subtitle {
+            color: var(--text-secondary);
+            font-size: 0.875rem;
+        }
+        
+        .ai-input-area {
+            margin-bottom: 1.5rem;
+        }
+        
+        .ai-textarea {
+            width: 100%;
+            min-height: 120px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            padding: 1rem;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            line-height: 1.6;
+            resize: vertical;
+            transition: var(--transition);
+            font-family: inherit;
+        }
+        
+        .ai-textarea:focus {
+            outline: none;
+            border-color: var(--primary-solid);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .ai-textarea::placeholder {
+            color: var(--text-muted);
+        }
+        
+        .ai-actions {
+            display: flex;
+            gap: 1rem;
+            flex-wrap: wrap;
+        }
+        
+        .ai-button {
+            background: var(--primary);
+            border: none;
+            border-radius: var(--radius);
+            color: white;
+            padding: 12px 24px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-family: inherit;
+        }
+        
+        .ai-button:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .ai-button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .ai-button.secondary {
+            background: var(--glass-bg);
+            color: var(--text-primary);
+            border: 1px solid var(--glass-border);
+        }
+        
+        /* Quick Add Enhanced */
+        .quick-add {
+            background: var(--glass-bg);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: 2rem;
+            margin-bottom: 2rem;
+            animation: slideUp 0.6s ease-out 0.4s both;
+        }
+        
+        .section-title {
+            font-family: 'Space Grotesk', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            margin-bottom: 1.5rem;
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+        
+        .quick-add-form {
+            display: grid;
+            grid-template-columns: 1fr auto auto auto auto;
+            gap: 1rem;
+            align-items: end;
+        }
+        
+        .form-input, .form-select {
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            padding: 12px 16px;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            transition: var(--transition);
+            font-family: inherit;
+        }
+        
+        .form-input:focus, .form-select:focus {
+            outline: none;
+            border-color: var(--primary-solid);
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        .form-input::placeholder {
+            color: var(--text-muted);
+        }
+        
+        /* Todo List Enhanced */
+        .todo-list {
+            background: var(--glass-bg);
+            backdrop-filter: blur(15px);
+            -webkit-backdrop-filter: blur(15px);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius-lg);
+            padding: 2rem;
+            animation: slideUp 0.6s ease-out 0.6s both;
+        }
+        
+        .todo-filters {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 2rem;
+            flex-wrap: wrap;
+        }
+        
+        .filter-btn {
+            background: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            color: var(--text-secondary);
+            padding: 8px 16px;
+            font-size: 0.875rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: var(--transition);
+            font-family: inherit;
+        }
+        
+        .filter-btn.active {
+            background: var(--primary);
+            color: white;
+            border-color: transparent;
+        }
+        
+        .filter-btn:hover:not(.active) {
+            border-color: var(--primary-solid);
+            color: var(--text-primary);
+        }
+        
+        /* Todo Items Enhanced */
+        .todo-items {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+        
+        .todo-item {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            padding: 1.5rem;
+            transition: var(--transition);
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .todo-item::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 4px;
+            height: 100%;
+            background: var(--primary);
+            transform: scaleY(0);
+            transition: transform 0.3s ease;
+        }
+        
+        .todo-item:hover {
+            transform: translateY(-2px);
+            background: rgba(255, 255, 255, 0.1);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .todo-item:hover::before {
+            transform: scaleY(1);
+        }
+        
+        .todo-item:hover .todo-actions {
+            opacity: 1;
+        }
+        
+        .todo-item.completed {
+            opacity: 0.7;
+        }
+        
+        .todo-item.completed::before {
+            background: var(--success);
+            transform: scaleY(1);
+        }
+        
+        .todo-content {
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+        }
+        
+        /* Main Content */
+        .main-content {
+            flex: 1;
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+            width: 100%;
+        }
+        
+        /* Empty State */
+        .empty-state {
+            text-align: center;
+            padding: 3rem;
+            color: var(--text-secondary);
+        }
+        
+        .empty-icon {
+            font-size: 4rem;
+            margin-bottom: 1rem;
+            opacity: 0.7;
+        }
+        
+        .empty-text {
+            font-size: 1.125rem;
+            font-weight: 500;
+        }
+        
+        /* AI Results */
+        .ai-results {
+            margin-top: 1.5rem;
+            padding: 1.5rem;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: var(--radius);
+            border: 1px solid var(--glass-border);
+        }
+        
+        .ai-results-header {
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+        
+        .extracted-todo {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--glass-border);
+            border-radius: var(--radius);
+            padding: 1rem;
+            margin-bottom: 1rem;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: var(--transition);
+        }
+        
+        .extracted-todo:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .extracted-todo-content {
+            flex: 1;
+        }
+        
+        .extracted-todo-title {
+            font-weight: 500;
+            color: var(--text-primary);
+            margin-bottom: 0.25rem;
+        }
+        
+        .extracted-todo-meta {
+            font-size: 0.75rem;
+            color: var(--text-secondary);
+            display: flex;
+            gap: 1rem;
+        }
+        
+        .add-extracted-btn {
+            background: var(--success);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 0.75rem;
+            cursor: pointer;
+            transition: var(--transition);
+            font-family: inherit;
+        }
+        
+        .add-extracted-btn:hover {
+            background: #059669;
+            transform: translateY(-1px);
+        }
+        
+        /* Loading states */
+        .loading-spinner {
+            width: 20px;
+            height: 20px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top: 2px solid white;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        
+        .loading-state {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+        
+        .loading-content {
+            text-align: center;
+        }
+        
+        /* Responsive Design */
+        @media (max-width: 1024px) {
+            .quick-add-form {
+                grid-template-columns: 1fr;
+                gap: 1rem;
+            }
+        }
+        
+        @media (max-width: 768px) {
+            .header-content {
+                flex-direction: column;
+                gap: 1rem;
+                text-align: center;
+            }
+            
+            .main-content {
+                padding: 1rem;
+            }
+            
+            .ai-actions {
+                flex-direction: column;
+            }
+            
+            .todo-filters {
+                flex-direction: column;
+                gap: 0.5rem;
+            }
+            
+            .ai-panel, .quick-add, .todo-list {
+                padding: 1.5rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="root">
+        <div class="loading-state">
+            <div class="loading-content">
+                <div class="loading-spinner" style="margin: 0 auto 1rem; width: 48px; height: 48px;"></div>
+                <h2 style="color: var(--text-primary); font-family: 'Space Grotesk', sans-serif; margin-bottom: 0.5rem;">Loading TaskFlow AI...</h2>
+                <p style="color: var(--text-secondary);">Initializing AI-powered task management</p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        window.addEventListener('load', () => {
+            setTimeout(() => {
+                if (typeof React !== 'undefined' && typeof ReactDOM !== 'undefined' && ReactDOM.createRoot) {
+                    console.log('✅ React 18 detected');
+                    
+                    // Load components first
+                    const componentsScript = document.createElement('script');
+                    componentsScript.src = './components-enhanced.js';
+                    componentsScript.onload = () => {
+                        console.log('✅ Enhanced components loaded');
+                        
+                        // Then load the main app
+                        const appScript = document.createElement('script');
+                        appScript.src = './app-ai-enhanced.js';
+                        appScript.onload = () => {
+                            console.log('✅ AI-enhanced app loaded');
+                            
+                            const container = document.getElementById('root');
+                            const root = ReactDOM.createRoot(container);
+                            
+                            if (window.TodoApp) {
+                                root.render(React.createElement(window.TodoApp));
+                                console.log('✅ TaskFlow AI app mounted successfully');
+                            } else {
+                                console.error('❌ TodoApp component not found');
+                                document.getElementById('root').innerHTML = `
+                                    <div class="loading-state">
+                                        <div class="loading-content">
+                                            <div style="font-size: 3rem; color: var(--error); margin-bottom: 1rem;">⚠️</div>
+                                            <h2 style="color: var(--error); margin-bottom: 0.5rem;">Failed to load application</h2>
+                                            <p style="color: var(--text-secondary);">Please refresh the page or check the console for errors</p>
+                                        </div>
+                                    </div>
+                                `;
+                            }
+                        };
+                        appScript.onerror = () => {
+                            console.error('❌ Failed to load AI-enhanced app');
+                            document.getElementById('root').innerHTML = `
+                                <div class="loading-state">
+                                    <div class="loading-content">
+                                        <div style="font-size: 3rem; color: var(--error); margin-bottom: 1rem;">⚠️</div>
+                                        <h2 style="color: var(--error); margin-bottom: 0.5rem;">Failed to load application</h2>
+                                        <p style="color: var(--text-secondary);">Could not load app-ai-enhanced.js</p>
+                                    </div>
+                                </div>
+                            `;
+                        };
+                        document.head.appendChild(appScript);
+                    };
+                    componentsScript.onerror = () => {
+                        console.error('❌ Failed to load enhanced components');
+                        document.getElementById('root').innerHTML = `
+                            <div class="loading-state">
+                                <div class="loading-content">
+                                    <div style="font-size: 3rem; color: var(--error); margin-bottom: 1rem;">⚠️</div>
+                                    <h2 style="color: var(--error); margin-bottom: 0.5rem;">Failed to load components</h2>
+                                    <p style="color: var(--text-secondary);">Could not load components-enhanced.js</p>
+                                </div>
+                            </div>
+                        `;
+                    };
+                    document.head.appendChild(componentsScript);
+                } else {
+                    console.error('❌ React 18 not available');
+                    document.getElementById('root').innerHTML = `
+                        <div class="loading-state">
+                            <div class="loading-content">
+                                <div style="font-size: 3rem; color: var(--error); margin-bottom: 1rem;">⚠️</div>
+                                <h2 style="color: var(--error); margin-bottom: 0.5rem;">React not available</h2>
+                                <p style="color: var(--text-secondary);">Please check your internet connection</p>
+                            </div>
+                        </div>
+                    `;
+                }
+            }, 1000);
+        });
+    </script>
+</body>
+</html>

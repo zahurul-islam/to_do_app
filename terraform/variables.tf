@@ -99,3 +99,29 @@ variable "enable_post_confirmation_trigger" {
   type        = bool
   default     = false
 }
+
+# AI API Keys variables
+variable "gemini_api_key" {
+  description = "Google Gemini API key for AI task extraction"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+variable "openai_api_key" {
+  description = "OpenAI API key for AI task extraction (fallback)"
+  type        = string
+  default     = ""
+  sensitive   = true
+}
+
+# Tags variable for consistent resource tagging
+variable "tags" {
+  description = "A map of tags to assign to the resources"
+  type        = map(string)
+  default = {
+    Project     = "TaskFlow-AI"
+    Environment = "production"
+    ManagedBy   = "terraform"
+  }
+}

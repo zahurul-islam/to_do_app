@@ -3,36 +3,69 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TaskFlow - AI-Powered Task Management</title>
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✅</text></svg>">
+    <title>TaskFlow - AI-Powered Todo Management</title>
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✓</text></svg>">
     
-    <!-- Modern Fonts -->
+    <!-- Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
     
-    <!-- Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-in-out',
+                        'slide-up': 'slideUp 0.3s ease-out',
+                        'bounce-in': 'bounceIn 0.6s ease-out',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(20px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' },
+                        },
+                        bounceIn: {
+                            '0%': { transform: 'scale(0.3)', opacity: '0' },
+                            '50%': { transform: 'scale(1.05)' },
+                            '70%': { transform: 'scale(0.9)' },
+                            '100%': { transform: 'scale(1)', opacity: '1' },
+                        },
+                    },
+                    backdropBlur: {
+                        xs: '2px',
+                    }
+                }
+            }
+        }
+    </script>
     
     <!-- React 18 -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
     
-    <!-- AWS SDK and Cognito -->
+    <!-- AWS Cognito -->
     <script src="https://sdk.amazonaws.com/js/aws-sdk-2.1396.0.min.js"></script>
     <script src="https://unpkg.com/amazon-cognito-identity-js@6.3.6/dist/amazon-cognito-identity.min.js"></script>
     
-    <!-- AWS Amplify Configuration Setup -->
+    <!-- AWS Amplify Authentication Interface -->
     <script>
         window.addEventListener('load', () => {
             setTimeout(() => {
-                console.log('🔍 Setting up AWS Amplify authentication...');
+                console.log('🔍 Setting up AWS Cognito authentication...');
                 
                 window.aws_amplify = {
                     Amplify: {
                         configure: (config) => {
-                            console.log('✅ AWS Cognito configured with:', config);
+                            console.log('✅ AWS Cognito configured');
                             window.COGNITO_CONFIG = config.Auth;
-                            
                             window.AWS.config.region = config.Auth.region;
                             
                             const poolData = {
@@ -49,12 +82,10 @@
                                 const cognitoUser = window.COGNITO_USER_POOL.getCurrentUser();
                                 if (cognitoUser) {
                                     cognitoUser.getSession((err, session) => {
-                                        if (err) {
-                                            reject(err);
-                                        } else if (session.isValid()) {
-                                            resolve(cognitoUser);
+                                        if (err || !session.isValid()) {
+                                            reject(err || new Error('Invalid session'));
                                         } else {
-                                            reject(new Error('Session invalid'));
+                                            resolve(cognitoUser);
                                         }
                                     });
                                 } else {
@@ -67,45 +98,67 @@
                                 const { username, password, attributes } = signUpData;
                                 const attributeList = [];
                                 
-                                if (attributes && attributes.email) {
-                                    const emailAttr = new window.AmazonCognitoIdentity.CognitoUserAttribute({
+                                if (attributes?.email) {
+                                    attributeList.push(new window.AmazonCognitoIdentity.CognitoUserAttribute({
                                         Name: 'email',
                                         Value: attributes.email
-                                    });
-                                    attributeList.push(emailAttr);
+                                    }));
+                                }
+                                
+                                if (attributes?.preferred_username) {
+                                    attributeList.push(new window.AmazonCognitoIdentity.CognitoUserAttribute({
+                                        Name: 'preferred_username',
+                                        Value: attributes.preferred_username
+                                    }));
                                 }
                                 
                                 window.COGNITO_USER_POOL.signUp(username, password, attributeList, null, (err, result) => {
-                                    if (err) {
-                                        reject(err);
-                                    } else {
-                                        resolve(result);
-                                    }
+                                    if (err) reject(err);
+                                    else resolve(result);
                                 });
                             });
                         },
                         signIn: (username, password) => {
                             return new Promise((resolve, reject) => {
-                                const authenticationData = {
+                                const authenticationDetails = new window.AmazonCognitoIdentity.AuthenticationDetails({
                                     Username: username,
                                     Password: password
-                                };
+                                });
                                 
-                                const authenticationDetails = new window.AmazonCognitoIdentity.AuthenticationDetails(authenticationData);
-                                const userData = {
+                                const cognitoUser = new window.AmazonCognitoIdentity.CognitoUser({
                                     Username: username,
                                     Pool: window.COGNITO_USER_POOL
-                                };
-                                
-                                const cognitoUser = new window.AmazonCognitoIdentity.CognitoUser(userData);
+                                });
                                 
                                 cognitoUser.authenticateUser(authenticationDetails, {
-                                    onSuccess: (result) => {
-                                        resolve(cognitoUser);
-                                    },
-                                    onFailure: (err) => {
-                                        reject(err);
-                                    }
+                                    onSuccess: () => resolve(cognitoUser),
+                                    onFailure: reject
+                                });
+                            });
+                        },
+                        confirmSignUp: (username, code) => {
+                            return new Promise((resolve, reject) => {
+                                const cognitoUser = new window.AmazonCognitoIdentity.CognitoUser({
+                                    Username: username,
+                                    Pool: window.COGNITO_USER_POOL
+                                });
+                                
+                                cognitoUser.confirmRegistration(code, true, (err, result) => {
+                                    if (err) reject(err);
+                                    else resolve(result);
+                                });
+                            });
+                        },
+                        resendSignUp: (username) => {
+                            return new Promise((resolve, reject) => {
+                                const cognitoUser = new window.AmazonCognitoIdentity.CognitoUser({
+                                    Username: username,
+                                    Pool: window.COGNITO_USER_POOL
+                                });
+                                
+                                cognitoUser.resendConfirmationCode((err, result) => {
+                                    if (err) reject(err);
+                                    else resolve(result);
                                 });
                             });
                         },
@@ -123,11 +176,8 @@
                                 const cognitoUser = window.COGNITO_USER_POOL.getCurrentUser();
                                 if (cognitoUser) {
                                     cognitoUser.getSession((err, session) => {
-                                        if (err) {
-                                            reject(err);
-                                        } else {
-                                            resolve(session);
-                                        }
+                                        if (err) reject(err);
+                                        else resolve(session);
                                     });
                                 } else {
                                     reject(new Error('No current user'));
@@ -141,361 +191,130 @@
         });
     </script>
     
+    <!-- Custom CSS for additional effects -->
     <style>
-        :root {
-            /* Modern Color Palette */
-            --primary-gradient: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            --secondary-gradient: linear-gradient(135deg, #ff6b6b 0%, #ee5a24 100%);
-            --success-gradient: linear-gradient(135deg, #00b894 0%, #00a085 100%);
-            --warning-gradient: linear-gradient(135deg, #fdcb6e 0%, #e17055 100%);
-            
-            /* Neutral Colors */
-            --gray-50: #f8fafc;
-            --gray-100: #f1f5f9;
-            --gray-200: #e2e8f0;
-            --gray-300: #cbd5e1;
-            --gray-400: #94a3b8;
-            --gray-500: #64748b;
-            --gray-600: #475569;
-            --gray-700: #334155;
-            --gray-800: #1e293b;
-            --gray-900: #0f172a;
-            
-            /* Design System */
-            --font-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            --font-mono: 'JetBrains Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
-            
-            /* Shadows */
-            --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-            --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
-            --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
-            --shadow-2xl: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
-            
-            /* Transitions */
-            --transition-fast: 0.15s ease-out;
-            --transition-base: 0.2s ease-out;
-            --transition-slow: 0.3s ease-out;
-            
-            /* Border Radius */
-            --radius-sm: 0.375rem;
-            --radius-md: 0.5rem;
-            --radius-lg: 0.75rem;
-            --radius-xl: 1rem;
-            --radius-2xl: 1.5rem;
-            --radius-3xl: 2rem;
-            
-            /* Spacing */
-            --space-1: 0.25rem;
-            --space-2: 0.5rem;
-            --space-3: 0.75rem;
-            --space-4: 1rem;
-            --space-5: 1.25rem;
-            --space-6: 1.5rem;
-            --space-8: 2rem;
-            --space-10: 2.5rem;
-            --space-12: 3rem;
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
         
         * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
         
-        body {
-            font-family: var(--font-primary);
-            background: var(--gray-50);
-            min-height: 100vh;
-            color: var(--gray-900);
-            line-height: 1.6;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
+        /* Smooth scrolling */
+        html {
+            scroll-behavior: smooth;
         }
         
-        .app-container {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        /* Custom Scrollbar */
+        /* Custom scrollbar */
         ::-webkit-scrollbar {
-            width: 8px;
+            width: 6px;
         }
         
         ::-webkit-scrollbar-track {
-            background: var(--gray-100);
-            border-radius: var(--radius-md);
+            background: #f1f1f1;
+            border-radius: 10px;
         }
         
         ::-webkit-scrollbar-thumb {
-            background: var(--gray-300);
-            border-radius: var(--radius-md);
-            transition: background var(--transition-fast);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
         }
         
         ::-webkit-scrollbar-thumb:hover {
-            background: var(--gray-400);
+            background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
         }
         
-        /* Animations */
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        /* Glassmorphism effect */
+        .glass {
+            background: rgba(255, 255, 255, 0.25);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
         }
         
-        @keyframes slideInRight {
-            0% {
-                transform: translateX(100%);
-                opacity: 0;
-            }
-            100% {
-                transform: translateX(0);
-                opacity: 1;
-            }
+        /* Floating animation */
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
         }
         
-        @keyframes slideInUp {
-            0% {
-                transform: translateY(20px);
-                opacity: 0;
-            }
-            100% {
-                transform: translateY(0);
-                opacity: 1;
-            }
+        .float {
+            animation: float 6s ease-in-out infinite;
         }
         
-        @keyframes fadeIn {
-            0% { opacity: 0; }
-            100% { opacity: 1; }
+        /* Gradient text */
+        .gradient-text {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        /* Loading state improvements */
+        .loading-dots {
+            display: inline-block;
+        }
+        
+        .loading-dots::after {
+            content: '';
+            animation: dots 1.5s infinite;
+        }
+        
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60% { content: '...'; }
+            80%, 100% { content: ''; }
+        }
+        
+        /* Enhanced focus states */
+        .focus-ring:focus {
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+        }
+        
+        /* Improved button interactions */
+        .btn-hover-lift:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+        }
+        
+        /* Card hover effects */
+        .card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        }
+        
+        /* Priority indicators */
+        .priority-urgent {
+            animation: pulse 2s infinite;
         }
         
         @keyframes pulse {
             0%, 100% { opacity: 1; }
-            50% { opacity: 0.5; }
+            50% { opacity: 0.7; }
         }
-        
-        /* Loading States */
-        .loading-state {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
-            background: var(--gray-50);
-            animation: fadeIn var(--transition-slow);
-        }
-        
-        .loading-content {
-            text-align: center;
-            animation: slideInUp var(--transition-slow);
-        }
-        
-        .loading-spinner {
-            width: 60px;
-            height: 60px;
-            border: 4px solid var(--gray-200);
-            border-top: 4px solid;
-            border-image: var(--primary-gradient) 1;
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 1.5rem;
-        }
-        
-        /* Enhanced Form Styles */
-        .form-input, .form-select, .form-textarea {
-            width: 100%;
-            padding: var(--space-4);
-            border: 2px solid var(--gray-200);
-            border-radius: var(--radius-xl);
-            font-size: 1rem;
-            font-family: inherit;
-            transition: all var(--transition-fast);
-            background: white;
-            color: var(--gray-900);
-        }
-        
-        .form-input:focus, .form-select:focus, .form-textarea:focus {
-            outline: none;
-            border-color: #667eea;
-            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
-            background: white;
-        }
-        
-        .form-input::placeholder, .form-textarea::placeholder {
-            color: var(--gray-400);
-        }
-        
-        /* Enhanced Button Styles */
-        .btn {
-            display: inline-flex;
-            align-items: center;
-            gap: var(--space-2);
-            padding: var(--space-3) var(--space-6);
-            border: none;
-            border-radius: var(--radius-xl);
-            font-weight: 600;
-            font-size: 0.875rem;
-            font-family: inherit;
-            cursor: pointer;
-            transition: all var(--transition-fast);
-            text-decoration: none;
-            position: relative;
-            overflow: hidden;
-        }
-        
-        .btn:disabled {
-            cursor: not-allowed;
-            opacity: 0.6;
-        }
-        
-        .btn-primary {
-            background: var(--primary-gradient);
-            color: white;
-            box-shadow: var(--shadow-md);
-        }
-        
-        .btn-primary:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-xl);
-        }
-        
-        .btn-secondary {
-            background: white;
-            color: var(--gray-700);
-            border: 2px solid var(--gray-200);
-            box-shadow: var(--shadow-sm);
-        }
-        
-        .btn-secondary:hover:not(:disabled) {
-            border-color: var(--gray-300);
-            box-shadow: var(--shadow-md);
-        }
-        
-        .btn-danger {
-            background: var(--secondary-gradient);
-            color: white;
-            box-shadow: var(--shadow-md);
-        }
-        
-        .btn-danger:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: var(--shadow-xl);
-        }
-        
-        /* Card Styles */
-        .card {
-            background: white;
-            border-radius: var(--radius-2xl);
-            padding: var(--space-8);
-            box-shadow: var(--shadow-lg);
-            border: 1px solid var(--gray-200);
-            transition: all var(--transition-base);
-        }
-        
-        .card:hover {
-            transform: translateY(-4px);
-            box-shadow: var(--shadow-2xl);
-        }
-        
-        /* Responsive Design */
-        @media (max-width: 768px) {
-            .card {
-                padding: var(--space-6);
-                margin: var(--space-4);
-            }
-            
-            .btn {
-                padding: var(--space-3) var(--space-4);
-                font-size: 0.8rem;
-            }
-        }
-        
-        /* Error/Success Message Styles */
-        .message {
-            padding: var(--space-4) var(--space-6);
-            border-radius: var(--radius-xl);
-            font-weight: 500;
-            margin-bottom: var(--space-6);
-            animation: slideInUp var(--transition-base);
-        }
-        
-        .message-error {
-            background: #fef2f2;
-            color: #dc2626;
-            border: 1px solid #fca5a5;
-        }
-        
-        .message-success {
-            background: #f0fdf4;
-            color: #16a34a;
-            border: 1px solid #bbf7d0;
-        }
-        
-        .message-info {
-            background: #f0f9ff;
-            color: #0369a1;
-            border: 1px solid #93c5fd;
-        }
-        
-        /* Utility Classes */
-        .text-center { text-align: center; }
-        .text-left { text-align: left; }
-        .text-right { text-align: right; }
-        
-        .font-bold { font-weight: 700; }
-        .font-semibold { font-weight: 600; }
-        .font-medium { font-weight: 500; }
-        
-        .flex { display: flex; }
-        .flex-col { flex-direction: column; }
-        .items-center { align-items: center; }
-        .justify-center { justify-content: center; }
-        .justify-between { justify-content: space-between; }
-        
-        .gap-1 { gap: var(--space-1); }
-        .gap-2 { gap: var(--space-2); }
-        .gap-3 { gap: var(--space-3); }
-        .gap-4 { gap: var(--space-4); }
-        .gap-6 { gap: var(--space-6); }
-        
-        .mb-2 { margin-bottom: var(--space-2); }
-        .mb-4 { margin-bottom: var(--space-4); }
-        .mb-6 { margin-bottom: var(--space-6); }
-        .mb-8 { margin-bottom: var(--space-8); }
-        
-        .p-4 { padding: var(--space-4); }
-        .p-6 { padding: var(--space-6); }
-        .p-8 { padding: var(--space-8); }
-        
-        .rounded { border-radius: var(--radius-md); }
-        .rounded-lg { border-radius: var(--radius-lg); }
-        .rounded-xl { border-radius: var(--radius-xl); }
-        .rounded-2xl { border-radius: var(--radius-2xl); }
-        
-        .shadow { box-shadow: var(--shadow-md); }
-        .shadow-lg { box-shadow: var(--shadow-lg); }
-        .shadow-xl { box-shadow: var(--shadow-xl); }
     </style>
 </head>
-<body>
+<body class="bg-gradient-to-br from-indigo-50 via-white to-purple-50 min-h-screen">
     <div id="root">
-        <div class="loading-state">
-            <div class="loading-content">
-                <div class="loading-spinner"></div>
-                <h2 style="color: var(--gray-600); margin-bottom: var(--space-2);">TaskFlow</h2>
-                <p style="color: var(--gray-500);">Loading AI-powered task management...</p>
+        <div class="min-h-screen flex items-center justify-center">
+            <div class="text-center">
+                <div class="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4"></div>
+                <div class="text-xl font-semibold text-gray-700 loading-dots">Loading TaskFlow</div>
+                <p class="text-gray-500 mt-2">AI-Powered Todo Management</p>
             </div>
         </div>
     </div>
 
-    <!-- React 18 Application Mounting -->
-    <script type="module">
+    <!-- Application Mounting Script -->
+    <script>
         window.addEventListener('load', () => {
             setTimeout(() => {
                 if (typeof React !== 'undefined' && typeof ReactDOM !== 'undefined' && ReactDOM.createRoot) {
-                    console.log('✅ React 18 detected, using createRoot');
+                    console.log('✅ React 18 detected, mounting modern app');
                     
                     const script = document.createElement('script');
                     script.src = './app-modern.js';
@@ -505,13 +324,15 @@
                         
                         if (window.TodoApp) {
                             root.render(React.createElement(window.TodoApp));
-                            console.log('✅ Enhanced TaskFlow app mounted successfully');
+                            console.log('✅ Modern TaskFlow app mounted successfully');
                         } else {
                             console.error('❌ TodoApp component not found');
                             container.innerHTML = `
-                                <div class="loading-state">
-                                    <div class="loading-content">
-                                        <p style="color: #dc2626;">Failed to load application. Please refresh the page.</p>
+                                <div class="min-h-screen flex items-center justify-center">
+                                    <div class="text-center">
+                                        <div class="text-6xl mb-4">⚠️</div>
+                                        <h1 class="text-2xl font-bold text-gray-800 mb-2">Failed to Load Application</h1>
+                                        <p class="text-gray-600">Please refresh the page or check your connection.</p>
                                     </div>
                                 </div>
                             `;
@@ -521,9 +342,14 @@
                         console.error('❌ Failed to load app-modern.js');
                         const container = document.getElementById('root');
                         container.innerHTML = `
-                            <div class="loading-state">
-                                <div class="loading-content">
-                                    <p style="color: #dc2626;">Failed to load application files. Please check your connection.</p>
+                            <div class="min-h-screen flex items-center justify-center">
+                                <div class="text-center">
+                                    <div class="text-6xl mb-4">📱</div>
+                                    <h1 class="text-2xl font-bold text-gray-800 mb-2">Application Error</h1>
+                                    <p class="text-gray-600 mb-4">Failed to load application files.</p>
+                                    <button onclick="window.location.reload()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+                                        Retry
+                                    </button>
                                 </div>
                             </div>
                         `;
@@ -532,9 +358,11 @@
                 } else {
                     console.error('❌ React 18 not available');
                     document.getElementById('root').innerHTML = `
-                        <div class="loading-state">
-                            <div class="loading-content">
-                                <p style="color: #dc2626;">React 18 is required but not available.</p>
+                        <div class="min-h-screen flex items-center justify-center">
+                            <div class="text-center">
+                                <div class="text-6xl mb-4">🔧</div>
+                                <h1 class="text-2xl font-bold text-gray-800 mb-2">Dependencies Missing</h1>
+                                <p class="text-gray-600">React 18 is required but not available.</p>
                             </div>
                         </div>
                     `;

@@ -275,9 +275,8 @@ resource "aws_lambda_function" "todos_handler_with_xray" {
   }
 
   depends_on = [
-    aws_iam_role_policy_attachment.lambda_basic_execution,
-    aws_iam_role_policy_attachment.lambda_dynamodb_attach,
     aws_iam_role_policy_attachment.lambda_xray_attach,
+    aws_iam_role.lambda_role,
   ]
 
   tags = {

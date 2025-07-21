@@ -52,6 +52,8 @@ resource "aws_dynamodb_table" "todos" {
 
 # Cognito User Pool Client is defined in cognito-enhanced.tf (using flowless configuration)
 
+# AI Integration is defined in ai-integration.tf
+
 # IAM Role for Lambda
 resource "random_string" "suffix" {
   length  = 8
@@ -74,12 +76,17 @@ resource "aws_iam_role" "lambda_role" {
       }
     ]
   })
+
+  tags = {
+    Name        = "TodoLambdaRole"
+    Environment = var.environment
+  }
 }
 
-# IAM Policy for Lambda to access DynamoDB
-resource "aws_iam_policy" "lambda_dynamodb_policy" {
-  name        = "todo-lambda-dynamodb-policy-${random_string.suffix.result}"
-  description = "Policy for Lambda to access DynamoDB"
+# IAM Policy for Lambda to access DynamoDB and CloudWatch Logs
+resource "aws_iam_policy" "lambda_policy" {
+  name        = "todo-lambda-policy-${random_string.suffix.result}"
+  description = "Policy for Lambda to access DynamoDB and CloudWatch Logs"
 
   policy = jsonencode({
     Version = "2012-10-17"
@@ -87,8 +94,17 @@ resource "aws_iam_policy" "lambda_dynamodb_policy" {
       {
         Effect = "Allow"
         Action = [
-          "dynamodb:GetItem",
+          "logs:CreateLogGroup",
+          "logs:CreateLogStream",
+          "logs:PutLogEvents"
+        ]
+        Resource = "arn:aws:logs:*:*:*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
           "dynamodb:PutItem",
+          "dynamodb:GetItem",
           "dynamodb:UpdateItem",
           "dynamodb:DeleteItem",
           "dynamodb:Query",
@@ -100,71 +116,64 @@ resource "aws_iam_policy" "lambda_dynamodb_policy" {
   })
 }
 
-# Attach DynamoDB policy to Lambda role
-resource "aws_iam_role_policy_attachment" "lambda_dynamodb_attach" {
+# Attach policy to Lambda role
+resource "aws_iam_role_policy_attachment" "lambda_policy_attachment" {
   role       = aws_iam_role.lambda_role.name
-  policy_arn = aws_iam_policy.lambda_dynamodb_policy.arn
+  policy_arn = aws_iam_policy.lambda_policy.arn
 }
 
-# Attach basic Lambda execution policy
-resource "aws_iam_role_policy_attachment" "lambda_basic_execution" {
-  role       = aws_iam_role.lambda_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+# Lambda function for handling todo CRUD operations
+resource "aws_lambda_function" "todos_handler" {
+  filename         = data.archive_file.lambda_zip.output_path
+  function_name    = "${var.project_name}-todos-handler"
+  role            = aws_iam_role.lambda_role.arn
+  handler         = "index.handler"
+  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+  runtime         = "python3.11"
+  timeout         = 30
+
+  environment {
+    variables = {
+      DYNAMODB_TABLE = aws_dynamodb_table.todos.name
+    }
+  }
+
+  tags = {
+    Name        = "TodosLambda"
+    Environment = var.environment
+  }
 }
 
 # Create Lambda function package
 data "archive_file" "lambda_zip" {
   type        = "zip"
-  output_path = "lambda_function.zip"
-  source_dir  = "${path.module}/lambda"
+  output_path = "${path.module}/lambda_function.zip"
+  source_file = "${path.module}/lambda/index.py"
 }
 
-# Lambda function for handling todos
-resource "aws_lambda_function" "todos_handler" {
-  filename         = data.archive_file.lambda_zip.output_path
-  function_name    = var.lambda_function_name
-  role             = aws_iam_role.lambda_role.arn
-  handler          = "index.handler"
-  runtime          = "python3.9"
-  timeout          = 30
-  source_code_hash = data.archive_file.lambda_zip.output_base64sha256
+# CloudWatch Log Group for Lambda is defined in monitoring.tf
 
-  environment {
-    variables = {
-      DYNAMODB_TABLE       = aws_dynamodb_table.todos.name
-      COGNITO_USER_POOL_ID = aws_cognito_user_pool.main.id
-    }
-  }
-
-  depends_on = [
-    aws_iam_role_policy_attachment.lambda_basic_execution,
-    aws_iam_role_policy_attachment.lambda_dynamodb_attach,
-  ]
+# API Gateway REST API
+resource "aws_api_gateway_rest_api" "todos_api" {
+  name        = "${var.project_name}-api"
+  description = "API for Todo application"
 
   tags = {
-    Name        = "TodosLambdaFunction"
+    Name        = "TodoAPI"
     Environment = var.environment
   }
 }
 
-# API Gateway
-resource "aws_api_gateway_rest_api" "todos_api" {
-  name        = var.api_gateway_name
-  description = "API for Serverless Todo App"
+# API Gateway Authorizer (Cognito User Pool) is defined in cognito-enhanced.tf
 
-  endpoint_configuration {
-    types = ["REGIONAL"]
-  }
-}
-
-# API Gateway Resource
+# API Gateway Resource - /todos
 resource "aws_api_gateway_resource" "todos_resource" {
   rest_api_id = aws_api_gateway_rest_api.todos_api.id
   parent_id   = aws_api_gateway_rest_api.todos_api.root_resource_id
   path_part   = "todos"
 }
 
-# API Gateway Resource for individual todo items
+# API Gateway Resource - /todos/{id}
 resource "aws_api_gateway_resource" "todo_item_resource" {
   rest_api_id = aws_api_gateway_rest_api.todos_api.id
   parent_id   = aws_api_gateway_resource.todos_resource.id
@@ -207,8 +216,6 @@ resource "aws_api_gateway_method" "delete_todo" {
   authorizer_id = aws_api_gateway_authorizer.cognito_authorizer.id
 }
 
-# Cognito Authorizer is defined in cognito-enhanced.tf
-
 # API Gateway Integration - GET /todos
 resource "aws_api_gateway_integration" "get_todos_integration" {
   rest_api_id = aws_api_gateway_rest_api.todos_api.id
@@ -216,8 +223,8 @@ resource "aws_api_gateway_integration" "get_todos_integration" {
   http_method = aws_api_gateway_method.get_todos.http_method
 
   integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.todos_handler.invoke_arn
+  type                   = "AWS_PROXY"
+  uri                    = aws_lambda_function.todos_handler.invoke_arn
 }
 
 # API Gateway Integration - POST /todos
@@ -227,8 +234,8 @@ resource "aws_api_gateway_integration" "post_todos_integration" {
   http_method = aws_api_gateway_method.post_todos.http_method
 
   integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.todos_handler.invoke_arn
+  type                   = "AWS_PROXY"
+  uri                    = aws_lambda_function.todos_handler.invoke_arn
 }
 
 # API Gateway Integration - PUT /todos/{id}
@@ -238,8 +245,8 @@ resource "aws_api_gateway_integration" "put_todo_integration" {
   http_method = aws_api_gateway_method.put_todo.http_method
 
   integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.todos_handler.invoke_arn
+  type                   = "AWS_PROXY"
+  uri                    = aws_lambda_function.todos_handler.invoke_arn
 }
 
 # API Gateway Integration - DELETE /todos/{id}
@@ -249,8 +256,8 @@ resource "aws_api_gateway_integration" "delete_todo_integration" {
   http_method = aws_api_gateway_method.delete_todo.http_method
 
   integration_http_method = "POST"
-  type                    = "AWS_PROXY"
-  uri                     = aws_lambda_function.todos_handler.invoke_arn
+  type                   = "AWS_PROXY"
+  uri                    = aws_lambda_function.todos_handler.invoke_arn
 }
 
 # CORS Configuration for /todos
@@ -265,10 +272,12 @@ resource "aws_api_gateway_integration" "options_todos_integration" {
   rest_api_id = aws_api_gateway_rest_api.todos_api.id
   resource_id = aws_api_gateway_resource.todos_resource.id
   http_method = aws_api_gateway_method.options_todos.http_method
+  type        = "MOCK"
 
-  type = "MOCK"
   request_templates = {
-    "application/json" = "{\"statusCode\": 200}"
+    "application/json" = jsonencode({
+      statusCode = 200
+    })
   }
 }
 
@@ -312,10 +321,12 @@ resource "aws_api_gateway_integration" "options_todo_item_integration" {
   rest_api_id = aws_api_gateway_rest_api.todos_api.id
   resource_id = aws_api_gateway_resource.todo_item_resource.id
   http_method = aws_api_gateway_method.options_todo_item.http_method
+  type        = "MOCK"
 
-  type = "MOCK"
   request_templates = {
-    "application/json" = "{\"statusCode\": 200}"
+    "application/json" = jsonencode({
+      statusCode = 200
+    })
   }
 }
 
@@ -365,6 +376,8 @@ resource "aws_api_gateway_deployment" "todos_deployment" {
     aws_api_gateway_integration.delete_todo_integration,
     aws_api_gateway_integration.options_todos_integration,
     aws_api_gateway_integration.options_todo_item_integration,
+    aws_api_gateway_integration.ai_extract_integration,
+    aws_api_gateway_integration.ai_extract_options_integration,
   ]
 
   rest_api_id = aws_api_gateway_rest_api.todos_api.id
@@ -373,14 +386,19 @@ resource "aws_api_gateway_deployment" "todos_deployment" {
     redeployment = sha1(jsonencode([
       aws_api_gateway_resource.todos_resource.id,
       aws_api_gateway_resource.todo_item_resource.id,
+      aws_api_gateway_resource.ai_extract_resource.id,
       aws_api_gateway_method.get_todos.id,
       aws_api_gateway_method.post_todos.id,
       aws_api_gateway_method.put_todo.id,
       aws_api_gateway_method.delete_todo.id,
+      aws_api_gateway_method.ai_extract_post.id,
+      aws_api_gateway_method.ai_extract_options.id,
       aws_api_gateway_integration.get_todos_integration.id,
       aws_api_gateway_integration.post_todos_integration.id,
       aws_api_gateway_integration.put_todo_integration.id,
       aws_api_gateway_integration.delete_todo_integration.id,
+      aws_api_gateway_integration.ai_extract_integration.id,
+      aws_api_gateway_integration.ai_extract_options_integration.id,
     ]))
   }
 
@@ -395,54 +413,3 @@ resource "aws_api_gateway_stage" "todos_stage" {
   rest_api_id   = aws_api_gateway_rest_api.todos_api.id
   stage_name    = var.api_gateway_stage
 }
-
-# AWS Amplify App - Commented out until repository URL is provided
-# resource "aws_amplify_app" "todo_app" {
-#   name       = var.amplify_app_name
-#   repository = var.amplify_repository_url
-
-#   # Build settings
-#   build_spec = "amplify.yml"
-
-#   # Environment variables
-#   environment_variables = {
-#     REACT_APP_USER_POOL_ID     = aws_cognito_user_pool.main.id
-#     REACT_APP_USER_POOL_CLIENT = aws_cognito_user_pool_client.main.id
-#     REACT_APP_API_URL          = aws_api_gateway_stage.todos_stage.invoke_url
-#   }
-
-#   # Custom rules for SPA routing
-#   custom_rule {
-#     source = "/<*>"
-#     status = "404"
-#     target = "/index.html"
-#   }
-
-#   tags = {
-#     Name        = "TodoAmplifyApp"
-#     Environment = var.environment
-#   }
-# }
-
-# # Amplify Branch
-# resource "aws_amplify_branch" "main" {
-#   app_id      = aws_amplify_app.todo_app.id
-#   branch_name = var.amplify_branch_name
-
-#   framework = "React"
-#   stage     = "PRODUCTION"
-
-#   enable_auto_build = true
-# }
-
-# # Amplify Domain Association (optional)
-# resource "aws_amplify_domain_association" "main" {
-#   count       = var.amplify_domain_name != "" ? 1 : 0
-#   app_id      = aws_amplify_app.todo_app.id
-#   domain_name = var.amplify_domain_name
-
-#   sub_domain {
-#     branch_name = aws_amplify_branch.main.branch_name
-#     prefix      = ""
-#   }
-# }

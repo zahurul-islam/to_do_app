@@ -1,45 +1,69 @@
-// Enhanced Modern Todo App with AI Integration - React 18 Compatible
-// Enhanced Modern Todo App with AI Integration
+// TaskFlow - Modern AI-Powered Todo App
+// Enhanced with AI text extraction and modern UI
+
 let AWS_CONFIG = {
     region: 'us-west-2',
-    userPoolId: 'loading...',
-    userPoolClientId: 'loading...',
-    apiGatewayUrl: 'loading...'
+    userPoolId: null,
+    userPoolClientId: null,
+    apiGatewayUrl: null
 };
 
-// Load configuration from config.json
+// Load configuration from config.json with better error handling
 const loadConfig = async () => {
     try {
         const response = await fetch('./config.json');
         if (response.ok) {
-            const config = await response.json();
-            AWS_CONFIG = { ...AWS_CONFIG, ...config };
-            console.log('✅ Configuration loaded successfully:', AWS_CONFIG);
-            return true;
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                const config = await response.json();
+                
+                if (config.userPoolId && config.userPoolId !== 'loading...' && 
+                    config.userPoolClientId && config.userPoolClientId !== 'loading...' &&
+                    config.apiGatewayUrl && config.apiGatewayUrl !== 'loading...') {
+                    
+                    AWS_CONFIG = { ...AWS_CONFIG, ...config };
+                    console.log('✅ Configuration loaded successfully:', AWS_CONFIG);
+                    return true;
+                } else {
+                    console.warn('⚠️ Config loaded but missing valid AWS resource IDs');
+                    return false;
+                }
+            } else {
+                console.warn('⚠️ Config.json returned HTML instead of JSON - deployment incomplete');
+                return false;
+            }
         } else {
-            console.warn('⚠️ Config.json not found, check Terraform deployment');
+            console.warn('⚠️ Config.json not found - run ./deploy.sh first');
             return false;
         }
     } catch (error) {
-        console.warn('⚠️ Failed to load config.json:', error);
+        console.warn('⚠️ Failed to load config.json:', error.message);
         return false;
     }
 };
 
-// Initialize authentication
+// Initialize AWS authentication
 let authInitialized = false;
-let authInitPromise = null;
+let authPromise = null;
 
-authInitPromise = new Promise(async (resolve) => {
-    const configLoaded = await loadConfig();
+const initializeAuth = () => {
+    if (authPromise) return authPromise;
     
-    if (!configLoaded) {
-        console.error('❌ Cannot initialize auth without config');
-        resolve(false);
-        return;
-    }
-    
-    setTimeout(() => {
+    authPromise = new Promise(async (resolve) => {
+        const configLoaded = await loadConfig();
+        
+        if (!configLoaded) {
+            console.error('❌ Cannot initialize auth without proper AWS configuration');
+            resolve(false);
+            return;
+        }
+        
+        if (!AWS_CONFIG.userPoolId || !AWS_CONFIG.userPoolClientId) {
+            console.error('❌ Missing required AWS Cognito configuration');
+            resolve(false);
+            return;
+        }
+        
         try {
             if (typeof aws_amplify !== 'undefined' && aws_amplify.Amplify) {
                 aws_amplify.Amplify.configure({
@@ -51,217 +75,302 @@ authInitPromise = new Promise(async (resolve) => {
                     }
                 });
                 authInitialized = true;
-                console.log('✅ AWS Authentication initialized successfully');
+                console.log('✅ Authentication initialized successfully');
                 resolve(true);
             } else {
                 console.error('❌ AWS Amplify not available');
-                authInitialized = false;
                 resolve(false);
             }
         } catch (error) {
-            console.error('❌ Error initializing authentication:', error);
-            authInitialized = false;
+            console.error('❌ Auth initialization failed:', error);
             resolve(false);
         }
-    }, 1500);
-});
+    });
+    
+    return authPromise;
+};
 
 // React hooks
-const { useState, useEffect, useRef, useCallback, useMemo } = React;
-
-// AI Integration with Gemini API
-const GeminiAI = {
-    apiKey: 'AIzaSyA7i9p0S8QPgcZLAwmRRtC89RPiiJuqWNI',
-    endpoint: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent',
-    
-    async extractTasks(text) {
-        try {
-            const prompt = `
-            Analyze the following text and extract actionable tasks. For each task found, return a JSON object with these fields:
-            - title: A clear, concise task title (required)
-            - category: Choose from 'work', 'personal', 'health', 'learning', 'shopping', 'other'
-            - priority: Choose from 'low', 'medium', 'high'
-            - description: Brief description if more context is available
-            
-            Text to analyze: "${text}"
-            
-            Return ONLY a JSON array of task objects. If no tasks are found, return an empty array [].
-            Do not include any other text or explanation.
-            `;
-            
-            const response = await fetch(`${this.endpoint}?key=${this.apiKey}`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    contents: [{
-                        parts: [{
-                            text: prompt
-                        }]
-                    }]
-                })
-            });
-            
-            if (!response.ok) {
-                throw new Error(`AI API error: ${response.status}`);
-            }
-            
-            const data = await response.json();
-            const aiResponse = data.candidates?.[0]?.content?.parts?.[0]?.text;
-            
-            if (!aiResponse) {
-                throw new Error('No response from AI');
-            }
-            
-            // Parse the JSON response
-            const cleanedResponse = aiResponse.replace(/```json\n?|\n?```/g, '').trim();
-            const tasks = JSON.parse(cleanedResponse);
-            
-            return Array.isArray(tasks) ? tasks : [];
-        } catch (error) {
-            console.error('❌ AI extraction error:', error);
-            throw new Error('Failed to extract tasks using AI. Please try manually adding tasks.');
-        }
-    }
-};
+const { useState, useEffect, useCallback, useRef } = React;
 
 // Utility functions
 const formatDate = (date) => {
-    if (!date) return '';
     try {
         return new Date(date).toLocaleDateString('en-US', {
-            year: 'numeric',
-            month: 'short',
-            day: 'numeric',
-            hour: '2-digit',
-            minute: '2-digit'
+            year: 'numeric', month: 'short', day: 'numeric'
         });
-    } catch (error) {
-        console.error('Error formatting date:', error);
-        return '';
-    }
+    } catch { return ''; }
 };
 
 const getInitials = (email) => {
-    if (!email || typeof email !== 'string') return 'U';
+    if (!email) return 'U';
     try {
         const parts = email.split('@')[0].split('.');
         return parts.map(part => part.charAt(0).toUpperCase()).join('').slice(0, 2);
-    } catch (error) {
-        console.error('Error getting initials:', error);
-        return 'U';
-    }
+    } catch { return 'U'; }
 };
 
-const generateId = () => {
-    return Date.now().toString(36) + Math.random().toString(36).substr(2);
-};
+const generateId = () => Date.now().toString(36) + Math.random().toString(36).substr(2);
 
-// Enhanced categories and priorities with better styling
+// Enhanced categories with modern icons
 const CATEGORIES = [
-    { id: 'work', name: 'Work', color: '#FF6B6B', icon: '💼', bgColor: '#FFF5F5' },
-    { id: 'personal', name: 'Personal', color: '#4ECDC4', icon: '👤', bgColor: '#F0FDFA' },
-    { id: 'health', name: 'Health', color: '#45B7D1', icon: '🏃', bgColor: '#F0F9FF' },
-    { id: 'learning', name: 'Learning', color: '#96CEB4', icon: '📚', bgColor: '#F0FDF4' },
-    { id: 'shopping', name: 'Shopping', color: '#FFEAA7', icon: '🛒', bgColor: '#FFFBF0' },
-    { id: 'other', name: 'Other', color: '#DDA0DD', icon: '📝', bgColor: '#FAF5FF' }
+    { id: 'work', name: 'Work', color: '#6366F1', icon: '💼', gradient: 'from-indigo-500 to-purple-600' },
+    { id: 'personal', name: 'Personal', color: '#10B981', icon: '👤', gradient: 'from-emerald-500 to-teal-600' },
+    { id: 'health', name: 'Health', color: '#F59E0B', icon: '🏃', gradient: 'from-amber-500 to-orange-600' },
+    { id: 'learning', name: 'Learning', color: '#8B5CF6', icon: '📚', gradient: 'from-violet-500 to-purple-600' },
+    { id: 'shopping', name: 'Shopping', color: '#EC4899', icon: '🛒', gradient: 'from-pink-500 to-rose-600' },
+    { id: 'meeting', name: 'Meeting', color: '#3B82F6', icon: '🤝', gradient: 'from-blue-500 to-indigo-600' },
+    { id: 'other', name: 'Other', color: '#6B7280', icon: '📝', gradient: 'from-gray-500 to-slate-600' }
 ];
 
 const PRIORITIES = [
-    { id: 'low', name: 'Low', color: '#22C55E', bgColor: '#F0FDF4' },
-    { id: 'medium', name: 'Medium', color: '#F59E0B', bgColor: '#FFFBF0' },
-    { id: 'high', name: 'High', color: '#EF4444', bgColor: '#FEF2F2' }
+    { id: 'low', name: 'Low', color: '#10B981', icon: '🟢' },
+    { id: 'medium', name: 'Medium', color: '#F59E0B', icon: '🟡' },
+    { id: 'high', name: 'High', color: '#EF4444', icon: '🔴' },
+    { id: 'urgent', name: 'Urgent', color: '#DC2626', icon: '⚡' }
 ];
 
-// Enhanced API Helper Functions
-const apiCall = async (endpoint, method = 'GET', data = null, retries = 3) => {
-    if (authInitPromise) {
-        await authInitPromise;
+// AI Text Extraction Service
+class AITextExtractor {
+    static async extractTodos(text) {
+        const response = await apiCall('/ai/extract', 'POST', { text });
+        return response.todos;
     }
     
-    for (let i = 0; i < retries; i++) {
-        try {
-            let token = '';
-            if (authInitialized && aws_amplify?.Auth) {
-                try {
-                    const session = await aws_amplify.Auth.currentSession();
-                    token = session.getIdToken().getJwtToken();
-                } catch (authError) {
-                    console.warn('⚠️ No valid session, API calls might fail.');
-                    throw authError;
-                }
-            } else {
-                throw new Error('Authentication not initialized. Cannot make API calls.');
-            }
-
-            const config = {
-                method,
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                }
-            };
-
-            if (data && method !== 'GET') {
-                config.body = JSON.stringify(data);
-            }
-
-            const response = await fetch(`${AWS_CONFIG.apiGatewayUrl}${endpoint}`, config);
-            
-            if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`API Error: ${response.status} - ${errorText}`);
-            }
-
-            const responseData = await response.json();
-            return responseData;
-        } catch (error) {
-            console.error(`API call failed (attempt ${i + 1}):`, error);
-            if (i === retries - 1) throw error;
-            await new Promise(resolve => setTimeout(resolve, 1000 * (i + 1)));
-        }
+    static categorizeTask(task) {
+        const taskLower = task.toLowerCase();
+        
+        if (taskLower.includes('meet') || taskLower.includes('call') || taskLower.includes('standup') || 
+            taskLower.includes('1:1') || taskLower.includes('sync')) return 'meeting';
+        if (taskLower.includes('buy') || taskLower.includes('order') || taskLower.includes('purchase')) return 'shopping';
+        if (taskLower.includes('exercise') || taskLower.includes('workout') || taskLower.includes('doctor') || 
+            taskLower.includes('health')) return 'health';
+        if (taskLower.includes('learn') || taskLower.includes('study') || taskLower.includes('course') || 
+            taskLower.includes('read')) return 'learning';
+        if (taskLower.includes('project') || taskLower.includes('work') || taskLower.includes('report') || 
+            taskLower.includes('deadline')) return 'work';
+        
+        return 'other';
     }
-};
+    
+    static prioritizeTask(task) {
+        const taskLower = task.toLowerCase();
+        
+        if (taskLower.includes('urgent') || taskLower.includes('asap') || taskLower.includes('immediately')) return 'urgent';
+        if (taskLower.includes('important') || taskLower.includes('critical') || taskLower.includes('deadline')) return 'high';
+        if (taskLower.includes('soon') || taskLower.includes('this week')) return 'medium';
+        
+        return 'low';
+    }
+    
+    static calculateConfidence(task, fullMatch) {
+        // Confidence will be determined by the AI, so this can be simplified or removed
+        return 1; // Assuming AI provides high confidence
+    }
+}
 
-// Enhanced Authentication Hook
-const useAuth = () => {
-    const [user, setUser] = useState(null);
-    const [loading, setLoading] = useState(true);
+// API helper with authentication
+const apiCall = async (endpoint, method = 'GET', data = null) => {
+    await initializeAuth();
+    
+    try {
+        let token = '';
+        if (authInitialized && aws_amplify?.Auth) {
+            const session = await aws_amplify.Auth.currentSession();
+            token = session.getIdToken().getJwtToken();
+        }
 
-    useEffect(() => {
-        const checkAuth = async () => {
-            if (authInitPromise) {
-                await authInitPromise;
-            }
-            
-            try {
-                if (authInitialized && aws_amplify?.Auth) {
-                    const currentUser = await aws_amplify.Auth.currentAuthenticatedUser();
-                    setUser(currentUser);
-                    console.log('✅ User authenticated:', currentUser.username);
-                }
-            } catch (error) {
-                console.log('ℹ️ No authenticated user found');
-                setUser(null);
-            } finally {
-                setLoading(false);
+        const config = {
+            method,
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`
             }
         };
 
+        if (data && method !== 'GET') {
+            config.body = JSON.stringify(data);
+        }
+
+        const response = await fetch(`${AWS_CONFIG.apiGatewayUrl}${endpoint}`, config);
+        
+        if (!response.ok) {
+            throw new Error(`API Error: ${response.status}`);
+        }
+
+        return await response.json();
+    } catch (error) {
+        console.error('API call failed:', error);
+        throw error;
+    }
+};
+
+// Enhanced Flowless Authentication Hook
+const useFlowlessAuth = () => {
+    const [user, setUser] = useState(null);
+    const [loading, setLoading] = useState(true);
+    const [authMode, setAuthMode] = useState('signin');
+    const [formData, setFormData] = useState({
+        email: '',
+        password: '',
+        confirmPassword: '',
+        verificationCode: ''
+    });
+    const [error, setError] = useState('');
+    const [pendingUser, setPendingUser] = useState(null);
+    const [configError, setConfigError] = useState(false);
+
+    useEffect(() => {
         checkAuth();
     }, []);
 
-    const signIn = async (username, password) => {
+    const checkAuth = async () => {
+        const authReady = await initializeAuth();
+        
+        if (!authReady) {
+            setConfigError(true);
+            setLoading(false);
+            setError('AWS configuration not available. Please deploy the infrastructure first.');
+            return;
+        }
+        
+        try {
+            if (authInitialized && aws_amplify?.Auth) {
+                const currentUser = await aws_amplify.Auth.currentAuthenticatedUser();
+                setUser(currentUser);
+                console.log('✅ User authenticated:', currentUser.username);
+            }
+        } catch (error) {
+            console.log('ℹ️ No authenticated user');
+            setUser(null);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const updateFormData = (field, value) => {
+        setFormData(prev => ({ ...prev, [field]: value }));
+        setError('');
+    };
+
+    const signUp = async () => {
         try {
             setLoading(true);
-            const user = await aws_amplify.Auth.signIn(username, password);
+            setError('');
+            
+            const result = await aws_amplify.Auth.signUp({
+                username: formData.email,
+                password: formData.password,
+                attributes: { 
+                    email: formData.email,
+                    preferred_username: formData.email.split('@')[0]
+                }
+            });
+            
+            setPendingUser(result.user);
+            setAuthMode('verify');
+            console.log('✅ Signup successful, verification needed');
+        } catch (error) {
+            console.error('❌ Signup failed:', error);
+            
+            if (error.code === 'UsernameExistsException') {
+                setError('Account already exists. Try signing in instead.');
+                setAuthMode('signin');
+            } else if (error.code === 'InvalidParameterException') {
+                try {
+                    const generatedUsername = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5);
+                    const result = await aws_amplify.Auth.signUp({
+                        username: generatedUsername,
+                        password: formData.password,
+                        attributes: { 
+                            email: formData.email,
+                            preferred_username: formData.email.split('@')[0]
+                        }
+                    });
+                    
+                    setPendingUser({ ...result.user, email: formData.email });
+                    setAuthMode('verify');
+                    console.log('✅ Signup successful with generated username');
+                } catch (retryError) {
+                    setError(retryError.message || 'Signup failed. Please try again.');
+                }
+            } else {
+                setError(error.message || 'Signup failed');
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const signIn = async () => {
+        try {
+            setLoading(true);
+            setError('');
+            
+            const user = await aws_amplify.Auth.signIn(formData.email, formData.password);
             setUser(user);
             console.log('✅ Sign in successful');
-            return user;
         } catch (error) {
-            console.error('❌ Sign in error:', error);
-            throw error;
+            console.error('❌ Sign in failed:', error);
+            
+            if (error.code === 'UserNotConfirmedException') {
+                setPendingUser({ username: formData.email, email: formData.email });
+                setAuthMode('verify');
+                setError('Please verify your email first');
+            } else if (error.code === 'UserNotFoundException') {
+                setError('Account not found. Please sign up first.');
+            } else if (error.code === 'NotAuthorizedException') {
+                setError('Invalid email or password. Please try again.');
+            } else {
+                setError(error.message || 'Sign in failed');
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const verifyCode = async () => {
+        try {
+            setLoading(true);
+            setError('');
+            
+            const usernameToVerify = pendingUser?.username || formData.email;
+            
+            await aws_amplify.Auth.confirmSignUp(usernameToVerify, formData.verificationCode);
+            
+            const user = await aws_amplify.Auth.signIn(formData.email, formData.password);
+            setUser(user);
+            console.log('✅ Verification and auto sign-in successful');
+        } catch (error) {
+            console.error('❌ Verification failed:', error);
+            
+            if (error.code === 'CodeMismatchException') {
+                setError('Verification code is incorrect. Please try again.');
+            } else if (error.code === 'ExpiredCodeException') {
+                setError('Verification code has expired. Please request a new one.');
+            } else {
+                setError(error.message || 'Verification failed');
+            }
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const resendCode = async () => {
+        try {
+            setLoading(true);
+            setError('');
+            
+            const usernameToResend = pendingUser?.username || formData.email;
+            
+            await aws_amplify.Auth.resendSignUp(usernameToResend);
+            console.log('✅ Verification code resent');
+            
+            setError('✅ New verification code sent to your email');
+            setTimeout(() => setError(''), 3000);
+        } catch (error) {
+            console.error('❌ Resend failed:', error);
+            setError(error.message || 'Failed to resend code');
         } finally {
             setLoading(false);
         }
@@ -272,1054 +381,535 @@ const useAuth = () => {
             setLoading(true);
             await aws_amplify.Auth.signOut();
             setUser(null);
+            setFormData({ email: '', password: '', confirmPassword: '', verificationCode: '' });
+            setAuthMode('signin');
             console.log('✅ Sign out successful');
         } catch (error) {
-            console.error('❌ Sign out error:', error);
+            console.error('❌ Sign out failed:', error);
         } finally {
             setLoading(false);
         }
     };
 
-    return { user, loading, signIn, signOut };
-};
-
-// Main Enhanced Todo App Component
-const TodoApp = () => {
-    const { user, loading: authLoading, signIn, signOut } = useAuth();
-    const [todos, setTodos] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [filter, setFilter] = useState('all');
-    const [notification, setNotification] = useState(null);
-    
-    // Load todos when user is authenticated
-    useEffect(() => {
-        if (user) {
-            loadTodos();
-        }
-    }, [user]);
-
-    const showNotification = (message, type = 'success') => {
-        setNotification({ message, type });
-        setTimeout(() => setNotification(null), 4000);
+    return {
+        user, loading, authMode, formData, error, configError,
+        updateFormData, signUp, signIn, verifyCode, resendCode, signOut,
+        setAuthMode, setError
     };
-
-    const loadTodos = async () => {
-        try {
-            setLoading(true);
-            const response = await apiCall('/todos');
-            setTodos(response.todos || []);
-            console.log('✅ Todos loaded:', response.todos?.length || 0);
-        } catch (error) {
-            console.error('❌ Failed to load todos:', error);
-            showNotification('Failed to load tasks. Please try again.', 'error');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const addTodo = async (todoData) => {
-        try {
-            setLoading(true);
-            const response = await apiCall('/todos', 'POST', todoData);
-            setTodos(prev => [...prev, response.todo]);
-            showNotification('Task added successfully! 🎉');
-            console.log('✅ Todo added');
-        } catch (error) {
-            console.error('❌ Failed to add todo:', error);
-            showNotification('Failed to add task. Please try again.', 'error');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const addMultipleTodos = async (todosData) => {
-        try {
-            setLoading(true);
-            const promises = todosData.map(todoData => apiCall('/todos', 'POST', {
-                ...todoData,
-                id: generateId(),
-                completed: false,
-                createdAt: new Date().toISOString()
-            }));
-            
-            const responses = await Promise.all(promises);
-            const newTodos = responses.map(response => response.todo);
-            setTodos(prev => [...prev, ...newTodos]);
-            showNotification(`🤖 AI extracted ${newTodos.length} task(s) successfully!`);
-            console.log('✅ Multiple todos added via AI');
-        } catch (error) {
-            console.error('❌ Failed to add multiple todos:', error);
-            showNotification('Failed to add AI-extracted tasks. Please try again.', 'error');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const updateTodo = async (id, updates) => {
-        try {
-            await apiCall(`/todos/${id}`, 'PUT', updates);
-            setTodos(prev => prev.map(todo => 
-                todo.id === id ? { ...todo, ...updates } : todo
-            ));
-            showNotification('Task updated successfully! ✅');
-            console.log('✅ Todo updated');
-        } catch (error) {
-            console.error('❌ Failed to update todo:', error);
-            showNotification('Failed to update task. Please try again.', 'error');
-        }
-    };
-
-    const deleteTodo = async (id) => {
-        try {
-            await apiCall(`/todos/${id}`, 'DELETE');
-            setTodos(prev => prev.filter(todo => todo.id !== id));
-            showNotification('Task deleted successfully! 🗑️');
-            console.log('✅ Todo deleted');
-        } catch (error) {
-            console.error('❌ Failed to delete todo:', error);
-            showNotification('Failed to delete task. Please try again.', 'error');
-        }
-    };
-
-    if (authLoading) {
-        return React.createElement(LoadingScreen, { message: 'Checking authentication...' });
-    }
-
-    if (!user) {
-        return React.createElement(LoginForm, { onSignIn: signIn });
-    }
-
-    return React.createElement('div', { className: 'app-container' }, [
-        React.createElement(Header, { 
-            key: 'header',
-            user, 
-            onSignOut: signOut 
-        }),
-        notification && React.createElement(Notification, {
-            key: 'notification',
-            ...notification,
-            onClose: () => setNotification(null)
-        }),
-        React.createElement('main', { 
-            key: 'main',
-            style: { 
-                flex: 1,
-                maxWidth: '1400px',
-                margin: '0 auto',
-                padding: '2rem',
-                width: '100%'
-            }
-        }, [
-            React.createElement(AITaskExtractor, { 
-                key: 'ai-extractor',
-                onTasksExtracted: addMultipleTodos,
-                loading: loading
-            }),
-            React.createElement(QuickAddPanel, { 
-                key: 'quick-add',
-                onAddTodo: addTodo,
-                loading: loading
-            }),
-            React.createElement(TodoDashboard, { 
-                key: 'dashboard',
-                todos: todos
-            }),
-            React.createElement(TodoSection, { 
-                key: 'todos',
-                todos,
-                loading,
-                filter,
-                onFilterChange: setFilter,
-                onUpdateTodo: updateTodo,
-                onDeleteTodo: deleteTodo
-            })
-        ])
-    ]);
 };
 
 // Enhanced Loading Screen Component
-const LoadingScreen = ({ message = 'Loading TaskFlow...' }) => {
-    return React.createElement('div', {
-        style: {
-            minHeight: '100vh',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            color: 'white'
-        }
-    }, React.createElement('div', {
-        style: { textAlign: 'center' }
+const LoadingScreen = ({ message = 'Loading...', error = false, showHelp = false }) => {
+    return React.createElement('div', { 
+        className: 'min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50 flex items-center justify-center p-4'
+    }, React.createElement('div', { 
+        className: 'text-center max-w-md',
     }, [
-        React.createElement('div', {
+        !error && React.createElement('div', { 
             key: 'spinner',
-            style: {
-                width: '60px',
-                height: '60px',
-                border: '4px solid rgba(255, 255, 255, 0.3)',
-                borderTop: '4px solid white',
-                borderRadius: '50%',
-                animation: 'spin 1s linear infinite',
-                margin: '0 auto 1.5rem'
-            }
+            className: 'w-12 h-12 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4'
         }),
-        React.createElement('h2', {
-            key: 'title',
-            style: {
-                fontSize: '1.5rem',
-                fontWeight: '600',
-                marginBottom: '0.5rem'
-            }
-        }, 'TaskFlow'),
-        React.createElement('p', {
-            key: 'message',
-            style: {
-                fontSize: '1rem',
-                opacity: 0.9
-            }
-        }, message)
+        error && React.createElement('div', {
+            key: 'error-icon',
+            className: 'text-6xl mb-4'
+        }, '⚠️'),
+        React.createElement('p', { 
+            key: 'text',
+            className: `text-lg font-medium ${error ? 'text-red-600' : 'text-gray-600'}`
+        }, message),
+        showHelp && React.createElement('div', {
+            key: 'help',
+            className: 'mt-8 p-6 bg-white rounded-2xl shadow-lg border border-gray-100 text-left'
+        }, [
+            React.createElement('h3', {
+                key: 'help-title',
+                className: 'text-lg font-bold text-gray-900 mb-4 flex items-center'
+            }, ['🚀 ', 'Quick Setup']),
+            React.createElement('ol', {
+                key: 'help-steps',
+                className: 'space-y-2 text-sm text-gray-600'
+            }, [
+                React.createElement('li', { key: 'step1', className: 'flex items-start' }, [
+                    React.createElement('span', { className: 'font-medium text-indigo-600 mr-2' }, '1.'),
+                    'Open terminal in project directory'
+                ]),
+                React.createElement('li', { key: 'step2', className: 'flex items-start' }, [
+                    React.createElement('span', { className: 'font-medium text-indigo-600 mr-2' }, '2.'),
+                    'Run: ./deploy.sh'
+                ]),
+                React.createElement('li', { key: 'step3', className: 'flex items-start' }, [
+                    React.createElement('span', { className: 'font-medium text-indigo-600 mr-2' }, '3.'),
+                    'Wait for deployment to complete'
+                ]),
+                React.createElement('li', { key: 'step4', className: 'flex items-start' }, [
+                    React.createElement('span', { className: 'font-medium text-indigo-600 mr-2' }, '4.'),
+                    'Refresh this page'
+                ])
+            ])
+        ])
     ]));
 };
 
-// Enhanced Notification Component
-const Notification = ({ message, type, onClose }) => {
-    const bgColor = type === 'error' ? '#FEF2F2' : '#F0FDF4';
-    const textColor = type === 'error' ? '#DC2626' : '#16A34A';
-    const borderColor = type === 'error' ? '#FCA5A5' : '#BBF7D0';
-
-    return React.createElement('div', {
-        style: {
-            position: 'fixed',
-            top: '2rem',
-            right: '2rem',
-            zIndex: 9999,
-            background: bgColor,
-            color: textColor,
-            border: `1px solid ${borderColor}`,
-            padding: '1rem 1.5rem',
-            borderRadius: '1rem',
-            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-            display: 'flex',
-            alignItems: 'center',
-            gap: '0.75rem',
-            maxWidth: '400px',
-            animation: 'slideInRight 0.3s ease-out'
-        }
-    }, [
-        React.createElement('span', {
-            key: 'icon',
-            style: { fontSize: '1.25rem' }
-        }, type === 'error' ? '❌' : '✅'),
-        React.createElement('span', {
-            key: 'message',
-            style: { flex: 1, fontWeight: '500' }
-        }, message),
-        React.createElement('button', {
-            key: 'close',
-            onClick: onClose,
-            style: {
-                background: 'none',
-                border: 'none',
-                color: textColor,
-                cursor: 'pointer',
-                fontSize: '1.25rem',
-                padding: '0.25rem'
-            }
-        }, '×')
-    ]);
-};
-
-// AI Task Extractor Component
-const AITaskExtractor = ({ onTasksExtracted, loading }) => {
-    const [text, setText] = useState('');
-    const [aiLoading, setAiLoading] = useState(false);
-    const [extractedTasks, setExtractedTasks] = useState([]);
-    const [showPreview, setShowPreview] = useState(false);
-
-    const handleExtractTasks = async () => {
-        if (!text.trim()) return;
-        
-        try {
-            setAiLoading(true);
-            const tasks = await GeminiAI.extractTasks(text);
-            setExtractedTasks(tasks);
-            setShowPreview(true);
-        } catch (error) {
-            console.error('❌ AI extraction failed:', error);
-            // Create a simple fallback task
-            const fallbackTask = {
-                title: text.slice(0, 100),
-                category: 'other',
-                priority: 'medium',
-                description: 'Manually added from text input'
-            };
-            setExtractedTasks([fallbackTask]);
-            setShowPreview(true);
-        } finally {
-            setAiLoading(false);
-        }
-    };
-
-    const handleConfirmTasks = () => {
-        onTasksExtracted(extractedTasks);
-        setText('');
-        setExtractedTasks([]);
-        setShowPreview(false);
-    };
-
-    const handleCancelTasks = () => {
-        setExtractedTasks([]);
-        setShowPreview(false);
-    };
-
-    return React.createElement('div', {
-        style: {
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            borderRadius: '2rem',
-            padding: '2.5rem',
-            marginBottom: '2rem',
-            color: 'white',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-            position: 'relative',
-            overflow: 'hidden'
-        }
-    }, [
-        React.createElement('div', {
-            key: 'background-pattern',
-            style: {
-                position: 'absolute',
-                top: '-50%',
-                right: '-50%',
-                width: '200%',
-                height: '200%',
-                background: 'radial-gradient(circle, rgba(255,255,255,0.1) 0%, transparent 70%)',
-                pointerEvents: 'none'
-            }
-        }),
-        React.createElement('div', {
-            key: 'content',
-            style: { position: 'relative', zIndex: 1 }
-        }, [
-            React.createElement('div', {
-                key: 'header',
-                style: {
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '1rem',
-                    marginBottom: '1.5rem'
-                }
-            }, [
-                React.createElement('div', {
-                    key: 'icon',
-                    style: {
-                        width: '48px',
-                        height: '48px',
-                        borderRadius: '1rem',
-                        background: 'rgba(255, 255, 255, 0.2)',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '1.5rem'
-                    }
-                }, '🤖'),
-                React.createElement('div', { key: 'text' }, [
-                    React.createElement('h2', {
-                        key: 'title',
-                        style: {
-                            fontSize: '1.5rem',
-                            fontWeight: '700',
-                            marginBottom: '0.25rem'
-                        }
-                    }, 'AI Task Extractor'),
-                    React.createElement('p', {
-                        key: 'subtitle',
-                        style: {
-                            fontSize: '1rem',
-                            opacity: 0.9
-                        }
-                    }, 'Paste emails, notes, or any text to automatically extract tasks')
-                ])
-            ]),
-            !showPreview && React.createElement('div', {
-                key: 'input-section'
-            }, [
-                React.createElement('textarea', {
-                    key: 'textarea',
-                    value: text,
-                    onChange: (e) => setText(e.target.value),
-                    placeholder: 'Paste your email, meeting notes, or any text here...\n\nExample: "Don\'t forget to:\n- Schedule dentist appointment\n- Buy groceries for dinner party\n- Review quarterly reports by Friday"',
-                    style: {
-                        width: '100%',
-                        minHeight: '120px',
-                        padding: '1rem',
-                        borderRadius: '1rem',
-                        border: '2px solid rgba(255, 255, 255, 0.2)',
-                        background: 'rgba(255, 255, 255, 0.1)',
-                        color: 'white',
-                        fontSize: '1rem',
-                        fontFamily: 'inherit',
-                        resize: 'vertical',
-                        marginBottom: '1rem'
-                    }
-                }),
-                React.createElement('div', {
-                    key: 'actions',
-                    style: {
-                        display: 'flex',
-                        gap: '1rem',
-                        alignItems: 'center'
-                    }
-                }, [
-                    React.createElement('button', {
-                        key: 'extract-btn',
-                        onClick: handleExtractTasks,
-                        disabled: !text.trim() || aiLoading || loading,
-                        style: {
-                            background: 'rgba(255, 255, 255, 0.2)',
-                            color: 'white',
-                            border: '2px solid rgba(255, 255, 255, 0.3)',
-                            padding: '0.75rem 1.5rem',
-                            borderRadius: '1rem',
-                            fontWeight: '600',
-                            fontSize: '1rem',
-                            cursor: text.trim() && !aiLoading && !loading ? 'pointer' : 'not-allowed',
-                            transition: 'all 0.15s ease-out',
-                            opacity: text.trim() && !aiLoading && !loading ? 1 : 0.6,
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '0.5rem'
-                        }
-                    }, [
-                        aiLoading && React.createElement('div', {
-                            key: 'spinner',
-                            style: {
-                                width: '16px',
-                                height: '16px',
-                                border: '2px solid rgba(255, 255, 255, 0.3)',
-                                borderTop: '2px solid white',
-                                borderRadius: '50%',
-                                animation: 'spin 1s linear infinite'
-                            }
-                        }),
-                        React.createElement('span', {
-                            key: 'text'
-                        }, aiLoading ? 'Extracting Tasks...' : '🚀 Extract Tasks with AI')
-                    ])
-                ])
-            ]),
-            showPreview && React.createElement(TaskPreview, {
-                key: 'preview',
-                tasks: extractedTasks,
-                onConfirm: handleConfirmTasks,
-                onCancel: handleCancelTasks,
-                loading: loading
-            })
-        ])
-    ]);
-};
-
-// Task Preview Component
-const TaskPreview = ({ tasks, onConfirm, onCancel, loading }) => {
-    return React.createElement('div', {
-        style: {
-            background: 'rgba(255, 255, 255, 0.1)',
-            borderRadius: '1rem',
-            padding: '1.5rem',
-            border: '1px solid rgba(255, 255, 255, 0.2)'
-        }
-    }, [
-        React.createElement('h3', {
-            key: 'title',
-            style: {
-                fontSize: '1.25rem',
-                fontWeight: '600',
-                marginBottom: '1rem',
-                color: 'white'
-            }
-        }, `🎯 Found ${tasks.length} task(s)`),
-        React.createElement('div', {
-            key: 'tasks',
-            style: {
-                display: 'flex',
-                flexDirection: 'column',
-                gap: '0.75rem',
-                marginBottom: '1.5rem',
-                maxHeight: '300px',
-                overflowY: 'auto'
-            }
-        }, tasks.map((task, index) => {
-            const category = CATEGORIES.find(c => c.id === task.category) || CATEGORIES[5];
-            const priority = PRIORITIES.find(p => p.id === task.priority) || PRIORITIES[1];
-            
-            return React.createElement('div', {
-                key: index,
-                style: {
-                    background: 'rgba(255, 255, 255, 0.1)',
-                    padding: '1rem',
-                    borderRadius: '0.75rem',
-                    border: '1px solid rgba(255, 255, 255, 0.1)'
-                }
-            }, [
-                React.createElement('div', {
-                    key: 'title',
-                    style: {
-                        fontSize: '1rem',
-                        fontWeight: '500',
-                        marginBottom: '0.5rem',
-                        color: 'white'
-                    }
-                }, task.title),
-                React.createElement('div', {
-                    key: 'meta',
-                    style: {
-                        display: 'flex',
-                        gap: '0.5rem',
-                        alignItems: 'center'
-                    }
-                }, [
-                    React.createElement('span', {
-                        key: 'category',
-                        style: {
-                            background: category.color,
-                            color: 'white',
-                            padding: '0.25rem 0.75rem',
-                            borderRadius: '1rem',
-                            fontSize: '0.75rem',
-                            fontWeight: '500'
-                        }
-                    }, `${category.icon} ${category.name}`),
-                    React.createElement('span', {
-                        key: 'priority',
-                        style: {
-                            background: priority.color,
-                            color: 'white',
-                            padding: '0.25rem 0.75rem',
-                            borderRadius: '1rem',
-                            fontSize: '0.75rem',
-                            fontWeight: '500'
-                        }
-                    }, priority.name)
-                ])
-            ]);
-        })),
-        React.createElement('div', {
-            key: 'actions',
-            style: {
-                display: 'flex',
-                gap: '1rem',
-                justifyContent: 'flex-end'
-            }
-        }, [
-            React.createElement('button', {
-                key: 'cancel',
-                onClick: onCancel,
-                disabled: loading,
-                style: {
-                    background: 'rgba(255, 255, 255, 0.1)',
-                    color: 'white',
-                    border: '2px solid rgba(255, 255, 255, 0.2)',
-                    padding: '0.75rem 1.5rem',
-                    borderRadius: '0.75rem',
-                    fontWeight: '500',
-                    cursor: loading ? 'not-allowed' : 'pointer',
-                    opacity: loading ? 0.6 : 1
-                }
-            }, 'Cancel'),
-            React.createElement('button', {
-                key: 'confirm',
-                onClick: onConfirm,
-                disabled: loading,
-                style: {
-                    background: 'rgba(255, 255, 255, 0.9)',
-                    color: '#667eea',
-                    border: 'none',
-                    padding: '0.75rem 1.5rem',
-                    borderRadius: '0.75rem',
-                    fontWeight: '600',
-                    cursor: loading ? 'not-allowed' : 'pointer',
-                    opacity: loading ? 0.6 : 1,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem'
-                }
-            }, [
-                loading && React.createElement('div', {
-                    key: 'spinner',
-                    style: {
-                        width: '16px',
-                        height: '16px',
-                        border: '2px solid #ddd',
-                        borderTop: '2px solid #667eea',
-                        borderRadius: '50%',
-                        animation: 'spin 1s linear infinite'
-                    }
-                }),
-                React.createElement('span', {
-                    key: 'text'
-                }, loading ? 'Adding Tasks...' : `✅ Add ${tasks.length} Task(s)`)
-            ])
-        ])
-    ]);
-};
-
-// Todo Dashboard Component
-const TodoDashboard = ({ todos }) => {
-    const stats = useMemo(() => {
-        const total = todos.length;
-        const completed = todos.filter(t => t.completed).length;
-        const pending = total - completed;
-        const completionRate = total > 0 ? Math.round((completed / total) * 100) : 0;
-        
-        const categoryStats = CATEGORIES.map(category => ({
-            ...category,
-            count: todos.filter(t => t.category === category.id).length
-        })).filter(cat => cat.count > 0);
-
-        return { total, completed, pending, completionRate, categoryStats };
-    }, [todos]);
-
-    return React.createElement('div', {
-        style: {
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))',
-            gap: '1.5rem',
-            marginBottom: '2rem'
-        }
-    }, [
-        React.createElement('div', {
-            key: 'total',
-            style: {
-                background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                color: 'white',
-                padding: '1.5rem',
-                borderRadius: '1.5rem',
-                textAlign: 'center',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-            }
-        }, [
-            React.createElement('div', {
-                key: 'number',
-                style: { fontSize: '2.5rem', fontWeight: '700', marginBottom: '0.5rem' }
-            }, stats.total),
-            React.createElement('div', {
-                key: 'label',
-                style: { fontSize: '1rem', opacity: 0.9 }
-            }, 'Total Tasks')
-        ]),
-        React.createElement('div', {
-            key: 'completed',
-            style: {
-                background: 'linear-gradient(135deg, #22C55E 0%, #16A34A 100%)',
-                color: 'white',
-                padding: '1.5rem',
-                borderRadius: '1.5rem',
-                textAlign: 'center',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-            }
-        }, [
-            React.createElement('div', {
-                key: 'number',
-                style: { fontSize: '2.5rem', fontWeight: '700', marginBottom: '0.5rem' }
-            }, stats.completed),
-            React.createElement('div', {
-                key: 'label',
-                style: { fontSize: '1rem', opacity: 0.9 }
-            }, 'Completed')
-        ]),
-        React.createElement('div', {
-            key: 'pending',
-            style: {
-                background: 'linear-gradient(135deg, #F59E0B 0%, #D97706 100%)',
-                color: 'white',
-                padding: '1.5rem',
-                borderRadius: '1.5rem',
-                textAlign: 'center',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-            }
-        }, [
-            React.createElement('div', {
-                key: 'number',
-                style: { fontSize: '2.5rem', fontWeight: '700', marginBottom: '0.5rem' }
-            }, stats.pending),
-            React.createElement('div', {
-                key: 'label',
-                style: { fontSize: '1rem', opacity: 0.9 }
-            }, 'Pending')
-        ]),
-        React.createElement('div', {
-            key: 'completion',
-            style: {
-                background: 'linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)',
-                color: 'white',
-                padding: '1.5rem',
-                borderRadius: '1.5rem',
-                textAlign: 'center',
-                boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
-            }
-        }, [
-            React.createElement('div', {
-                key: 'number',
-                style: { fontSize: '2.5rem', fontWeight: '700', marginBottom: '0.5rem' }
-            }, `${stats.completionRate}%`),
-            React.createElement('div', {
-                key: 'label',
-                style: { fontSize: '1rem', opacity: 0.9 }
-            }, 'Complete')
-        ])
-    ]);
-};
-
-// Enhanced Login Form Component
-const LoginForm = ({ onSignIn }) => {
-    const [credentials, setCredentials] = useState({ username: '', password: '' });
-    const [loading, setLoading] = useState(false);
-    const [error, setError] = useState('');
+// Modern Authentication Screen
+const AuthScreen = ({ auth }) => {
+    const { authMode, formData, error, loading, updateFormData, signUp, signIn, verifyCode, resendCode, setAuthMode, setError } = auth;
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setLoading(true);
         setError('');
-        
-        try {
-            await onSignIn(credentials.username, credentials.password);
-        } catch (error) {
-            setError(error.message || 'Failed to sign in');
-        } finally {
-            setLoading(false);
+
+        if (authMode === 'signup') {
+            if (formData.password !== formData.confirmPassword) {
+                setError('Passwords do not match');
+                return;
+            }
+            await signUp();
+        } else if (authMode === 'signin') {
+            await signIn();
+        } else if (authMode === 'verify') {
+            await verifyCode();
         }
     };
 
+    const switchMode = (mode) => {
+        setAuthMode(mode);
+        setError('');
+    };
+
     return React.createElement('div', { 
-        style: { 
-            minHeight: '100vh',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            padding: '2rem'
-        }
+        className: 'min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-800 flex items-center justify-center p-4'
     }, React.createElement('div', { 
-        style: {
-            background: 'white',
-            borderRadius: '2rem',
-            padding: '3rem',
-            boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1)',
-            width: '100%',
-            maxWidth: '450px',
-            position: 'relative',
-            overflow: 'hidden'
-        }
+        className: 'w-full max-w-md'
     }, [
-        React.createElement('div', {
-            key: 'background',
-            style: {
-                position: 'absolute',
-                top: '-50%',
-                right: '-50%',
-                width: '200%',
-                height: '200%',
-                background: 'radial-gradient(circle, rgba(102, 126, 234, 0.05) 0%, transparent 70%)',
-                pointerEvents: 'none'
-            }
-        }),
         React.createElement('div', { 
-            key: 'content',
-            style: { position: 'relative', zIndex: 1 }
+            key: 'card',
+            className: 'bg-white/95 backdrop-blur-xl rounded-3xl shadow-2xl p-8 border border-white/20'
         }, [
             React.createElement('div', { 
                 key: 'header',
-                style: { textAlign: 'center', marginBottom: '2.5rem' }
+                className: 'text-center mb-8'
             }, [
                 React.createElement('div', { 
                     key: 'logo',
-                    style: {
-                        width: '80px',
-                        height: '80px',
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                        borderRadius: '1.5rem',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '2.5rem',
-                        color: 'white',
-                        margin: '0 auto 1.5rem',
-                        boxShadow: '0 10px 15px -3px rgba(102, 126, 234, 0.3)'
-                    }
-                }, '✓'),
+                    className: 'w-16 h-16 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg'
+                }, React.createElement('span', { className: 'text-2xl font-bold text-white' }, '✓')),
                 React.createElement('h1', { 
                     key: 'title',
-                    style: {
-                        fontSize: '2rem',
-                        fontWeight: '800',
-                        color: '#1E293B',
-                        marginBottom: '0.5rem'
-                    }
+                    className: 'text-3xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent'
                 }, 'TaskFlow'),
                 React.createElement('p', { 
                     key: 'subtitle',
-                    style: {
-                        color: '#64748B',
-                        fontSize: '1rem'
-                    }
-                }, 'Modern task management with AI')
+                    className: 'text-gray-600 mt-2'
+                }, authMode === 'verify' ? 'Verify your email' : 
+                    authMode === 'signup' ? 'Create your account' : 'Welcome back')
             ]),
+
+            error && React.createElement('div', {
+                key: 'error',
+                className: 'mb-6 p-4 bg-red-50 border border-red-200 rounded-xl text-red-700 text-sm'
+            }, error),
+
             React.createElement('form', { 
                 key: 'form',
-                onSubmit: handleSubmit 
+                onSubmit: handleSubmit,
+                className: 'space-y-6'
             }, [
-                React.createElement('div', { 
-                    key: 'username-group',
-                    style: { marginBottom: '1.5rem' }
+                // Email field
+                (authMode === 'signin' || authMode === 'signup') && React.createElement('div', { 
+                    key: 'email-group'
                 }, [
                     React.createElement('label', { 
-                        key: 'username-label',
-                        style: {
-                            display: 'block',
-                            fontSize: '0.875rem',
-                            fontWeight: '600',
-                            color: '#374151',
-                            marginBottom: '0.5rem'
-                        }
-                    }, 'Username'),
+                        key: 'email-label',
+                        className: 'block text-sm font-semibold text-gray-700 mb-2'
+                    }, 'Email'),
                     React.createElement('input', {
-                        key: 'username-input',
-                        type: 'text',
-                        value: credentials.username,
-                        onChange: (e) => setCredentials(prev => ({
-                            ...prev,
-                            username: e.target.value
-                        })),
-                        style: {
-                            width: '100%',
-                            padding: '1rem',
-                            border: '2px solid #E5E7EB',
-                            borderRadius: '1rem',
-                            fontSize: '1rem',
-                            transition: 'border-color 0.15s ease-out',
-                            background: 'white'
-                        },
-                        required: true
+                        key: 'email-input',
+                        type: 'email',
+                        className: 'w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200',
+                        value: formData.email,
+                        onChange: (e) => updateFormData('email', e.target.value),
+                        required: true,
+                        placeholder: 'Enter your email'
                     })
                 ]),
-                React.createElement('div', { 
-                    key: 'password-group',
-                    style: { marginBottom: '2rem' }
+
+                // Password fields
+                (authMode === 'signin' || authMode === 'signup') && React.createElement('div', { 
+                    key: 'password-group'
                 }, [
                     React.createElement('label', { 
                         key: 'password-label',
-                        style: {
-                            display: 'block',
-                            fontSize: '0.875rem',
-                            fontWeight: '600',
-                            color: '#374151',
-                            marginBottom: '0.5rem'
-                        }
+                        className: 'block text-sm font-semibold text-gray-700 mb-2'
                     }, 'Password'),
                     React.createElement('input', {
                         key: 'password-input',
                         type: 'password',
-                        value: credentials.password,
-                        onChange: (e) => setCredentials(prev => ({
-                            ...prev,
-                            password: e.target.value
-                        })),
-                        style: {
-                            width: '100%',
-                            padding: '1rem',
-                            border: '2px solid #E5E7EB',
-                            borderRadius: '1rem',
-                            fontSize: '1rem',
-                            transition: 'border-color 0.15s ease-out',
-                            background: 'white'
-                        },
-                        required: true
+                        className: 'w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200',
+                        value: formData.password,
+                        onChange: (e) => updateFormData('password', e.target.value),
+                        required: true,
+                        placeholder: 'Enter your password'
                     })
                 ]),
-                error && React.createElement('div', {
-                    key: 'error',
-                    style: {
-                        background: '#FEF2F2',
-                        color: '#DC2626',
-                        padding: '1rem',
-                        borderRadius: '1rem',
-                        marginBottom: '1.5rem',
-                        fontSize: '0.875rem',
-                        fontWeight: '500',
-                        border: '1px solid #FCA5A5'
-                    }
-                }, error),
+
+                // Confirm password
+                authMode === 'signup' && React.createElement('div', { 
+                    key: 'confirm-password-group'
+                }, [
+                    React.createElement('label', { 
+                        key: 'confirm-password-label',
+                        className: 'block text-sm font-semibold text-gray-700 mb-2'
+                    }, 'Confirm Password'),
+                    React.createElement('input', {
+                        key: 'confirm-password-input',
+                        type: 'password',
+                        className: 'w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200',
+                        value: formData.confirmPassword,
+                        onChange: (e) => updateFormData('confirmPassword', e.target.value),
+                        required: true,
+                        placeholder: 'Confirm your password'
+                    })
+                ]),
+
+                // Verification code
+                authMode === 'verify' && React.createElement('div', { 
+                    key: 'code-group'
+                }, [
+                    React.createElement('label', { 
+                        key: 'code-label',
+                        className: 'block text-sm font-semibold text-gray-700 mb-2'
+                    }, 'Verification Code'),
+                    React.createElement('input', {
+                        key: 'code-input',
+                        type: 'text',
+                        className: 'w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200 text-center text-lg tracking-widest',
+                        value: formData.verificationCode,
+                        onChange: (e) => updateFormData('verificationCode', e.target.value.replace(/\D/g, '').slice(0, 6)),
+                        required: true,
+                        placeholder: '000000',
+                        maxLength: 6
+                    }),
+                    React.createElement('p', { 
+                        key: 'code-help',
+                        className: 'text-sm text-gray-500 mt-2 text-center'
+                    }, 'Check your email for the 6-digit code')
+                ]),
+
+                // Submit button
                 React.createElement('button', {
                     key: 'submit',
                     type: 'submit',
-                    disabled: loading,
-                    style: {
-                        width: '100%',
-                        background: loading ? '#9CA3AF' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                        color: 'white',
-                        border: 'none',
-                        padding: '1rem',
-                        borderRadius: '1rem',
-                        fontSize: '1rem',
-                        fontWeight: '600',
-                        cursor: loading ? 'not-allowed' : 'pointer',
-                        transition: 'all 0.15s ease-out',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        gap: '0.5rem'
-                    }
+                    className: 'w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 px-4 rounded-xl font-semibold hover:from-indigo-700 hover:to-purple-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 transition-all duration-200 shadow-lg disabled:opacity-50',
+                    disabled: loading
+                }, loading ? 'Please wait...' : 
+                    authMode === 'verify' ? 'Verify & Sign In' :
+                    authMode === 'signup' ? 'Create Account' : 'Sign In')
+            ]),
+
+            // Mode switching
+            React.createElement('div', { 
+                key: 'actions',
+                className: 'mt-6 text-center space-y-2'
+            }, [
+                authMode === 'signin' && React.createElement('p', { 
+                    key: 'signup-link',
+                    className: 'text-sm text-gray-600'
                 }, [
-                    loading && React.createElement('div', {
-                        key: 'spinner',
-                        style: {
-                            width: '20px',
-                            height: '20px',
-                            border: '2px solid rgba(255, 255, 255, 0.3)',
-                            borderTop: '2px solid white',
-                            borderRadius: '50%',
-                            animation: 'spin 1s linear infinite'
-                        }
-                    }),
-                    React.createElement('span', {
-                        key: 'text'
-                    }, loading ? 'Signing in...' : 'Sign In')
+                    'Don\'t have an account? ',
+                    React.createElement('button', {
+                        key: 'signup-btn',
+                        type: 'button',
+                        className: 'text-indigo-600 font-semibold hover:text-indigo-700 transition-colors',
+                        onClick: () => switchMode('signup')
+                    }, 'Sign up')
+                ]),
+
+                authMode === 'signup' && React.createElement('p', { 
+                    key: 'signin-link',
+                    className: 'text-sm text-gray-600'
+                }, [
+                    'Already have an account? ',
+                    React.createElement('button', {
+                        key: 'signin-btn',
+                        type: 'button',
+                        className: 'text-indigo-600 font-semibold hover:text-indigo-700 transition-colors',
+                        onClick: () => switchMode('signin')
+                    }, 'Sign in')
+                ]),
+
+                authMode === 'verify' && React.createElement('p', { 
+                    key: 'resend-link',
+                    className: 'text-sm text-gray-600'
+                }, [
+                    'Didn\'t receive the code? ',
+                    React.createElement('button', {
+                        key: 'resend-btn',
+                        type: 'button',
+                        className: 'text-indigo-600 font-semibold hover:text-indigo-700 transition-colors',
+                        onClick: resendCode
+                    }, 'Resend')
                 ])
             ])
         ])
     ]));
 };
 
-// Enhanced Header Component
+// Modern Header Component
 const Header = ({ user, onSignOut }) => {
     return React.createElement('header', { 
-        style: {
-            background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-            color: 'white',
-            padding: '1.5rem 0',
-            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-            position: 'sticky',
-            top: 0,
-            zIndex: 1000
-        }
+        className: 'bg-white/80 backdrop-blur-xl border-b border-gray-200/50 sticky top-0 z-50'
     }, React.createElement('div', { 
-        style: {
-            maxWidth: '1400px',
-            margin: '0 auto',
-            padding: '0 2rem',
-            display: 'flex',
-            justifyContent: 'space-between',
-            alignItems: 'center'
-        }
+        className: 'max-w-7xl mx-auto px-4 sm:px-6 lg:px-8'
+    }, React.createElement('div', { 
+        className: 'flex justify-between items-center h-16'
     }, [
         React.createElement('div', { 
-            key: 'logo-section',
-            style: { display: 'flex', alignItems: 'center', gap: '1rem' }
+            key: 'brand',
+            className: 'flex items-center space-x-3'
         }, [
             React.createElement('div', { 
                 key: 'logo',
-                style: {
-                    width: '56px',
-                    height: '56px',
-                    background: 'rgba(255, 255, 255, 0.2)',
-                    borderRadius: '1rem',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.75rem',
-                    fontWeight: '700',
-                    backdropFilter: 'blur(10px)'
-                }
-            }, '✓'),
-            React.createElement('div', { key: 'brand-info' }, [
+                className: 'w-10 h-10 bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl flex items-center justify-center shadow-lg'
+            }, React.createElement('span', { className: 'text-xl font-bold text-white' }, '✓')),
+            React.createElement('div', { key: 'brand-text' }, [
                 React.createElement('h1', { 
                     key: 'title',
-                    style: { 
-                        fontSize: '2rem', 
-                        fontWeight: '800', 
-                        marginBottom: '0.25rem',
-                        background: 'linear-gradient(135deg, #ffffff 0%, #f0f0f0 100%)',
-                        WebkitBackgroundClip: 'text',
-                        WebkitTextFillColor: 'transparent',
-                        backgroundClip: 'text'
-                    }
+                    className: 'text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent'
                 }, 'TaskFlow'),
                 React.createElement('p', { 
                     key: 'subtitle',
-                    style: { 
-                        fontSize: '0.875rem', 
-                        opacity: 0.9, 
-                        fontWeight: '500' 
-                    }
-                }, 'AI-Powered Task Management')
+                    className: 'text-xs text-gray-500 font-medium'
+                }, 'AI-Powered Todo Management')
             ])
         ]),
         React.createElement('div', { 
             key: 'user-section',
-            style: { display: 'flex', alignItems: 'center', gap: '1.5rem' }
+            className: 'flex items-center space-x-4'
         }, [
-            React.createElement('div', {
+            React.createElement('div', { 
                 key: 'user-info',
-                style: { textAlign: 'right' }
+                className: 'hidden sm:flex items-center space-x-3'
             }, [
-                React.createElement('div', {
-                    key: 'welcome',
-                    style: { fontSize: '0.875rem', opacity: 0.9 }
-                }, 'Welcome back'),
-                React.createElement('div', {
+                React.createElement('div', { 
+                    key: 'avatar',
+                    className: 'w-8 h-8 bg-gradient-to-r from-indigo-500 to-purple-500 rounded-full flex items-center justify-center text-white text-sm font-semibold'
+                }, getInitials(user?.username || 'User')),
+                React.createElement('span', { 
                     key: 'username',
-                    style: { fontSize: '1rem', fontWeight: '600' }
+                    className: 'text-sm font-medium text-gray-700'
                 }, user?.username || 'User')
             ]),
-            React.createElement('div', { 
-                key: 'avatar',
-                style: {
-                    width: '48px',
-                    height: '48px',
-                    borderRadius: '1rem',
-                    background: 'rgba(255, 255, 255, 0.2)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.25rem',
-                    fontWeight: '600',
-                    backdropFilter: 'blur(10px)'
-                }
-            }, getInitials(user?.username || 'User')),
             React.createElement('button', {
                 key: 'signout',
                 onClick: onSignOut,
-                style: {
-                    background: 'rgba(255, 255, 255, 0.1)',
-                    color: 'white',
-                    border: '2px solid rgba(255, 255, 255, 0.2)',
-                    padding: '0.75rem 1.5rem',
-                    borderRadius: '1rem',
-                    fontWeight: '600',
-                    fontSize: '0.875rem',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease-out',
-                    backdropFilter: 'blur(10px)'
-                },
-                onMouseEnter: (e) => {
-                    e.target.style.background = 'rgba(255, 255, 255, 0.2)';
-                    e.target.style.transform = 'translateY(-2px)';
-                },
-                onMouseLeave: (e) => {
-                    e.target.style.background = 'rgba(255, 255, 255, 0.1)';
-                    e.target.style.transform = 'translateY(0)';
-                }
-            }, '👋 Sign Out')
+                className: 'px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors'
+            }, 'Sign Out')
         ])
-    ]));
+    ])));
 };
 
-// Enhanced Quick Add Panel Component  
-const QuickAddPanel = ({ onAddTodo, loading }) => {
+// AI Text Extraction Component
+const AITextExtractorComponent = ({ onExtractTodos }) => {
+    const [text, setText] = useState('');
+    const [extractedTodos, setExtractedTodos] = useState([]);
+    const [isExtracting, setIsExtracting] = useState(false);
+    const [showExtracted, setShowExtracted] = useState(false);
+
+    const handleExtract = async () => {
+        if (!text.trim()) return;
+        
+        setIsExtracting(true);
+        try {
+            const todos = await AITextExtractor.extractTodos(text);
+            setExtractedTodos(todos);
+            setShowExtracted(true);
+        } catch (error) {
+            console.error('Error extracting todos:', error);
+        } finally {
+            setIsExtracting(false);
+        }
+    };
+
+    const handleAddTodo = (todo) => {
+        onExtractTodos([{
+            ...todo,
+            id: generateId(),
+            completed: false,
+            createdAt: new Date().toISOString()
+        }]);
+        
+        // Remove from extracted list
+        setExtractedTodos(prev => prev.filter(t => t.title !== todo.title));
+    };
+
+    const handleAddAllTodos = () => {
+        const todosToAdd = extractedTodos.map(todo => ({
+            ...todo,
+            id: generateId(),
+            completed: false,
+            createdAt: new Date().toISOString()
+        }));
+        
+        onExtractTodos(todosToAdd);
+        setExtractedTodos([]);
+        setShowExtracted(false);
+        setText('');
+    };
+
+    return React.createElement('div', {
+        className: 'bg-gradient-to-r from-purple-50 to-pink-50 rounded-2xl p-6 border border-purple-100'
+    }, [
+        React.createElement('div', {
+            key: 'header',
+            className: 'flex items-center justify-between mb-4'
+        }, [
+            React.createElement('h3', {
+                key: 'title',
+                className: 'text-lg font-semibold text-gray-900 flex items-center'
+            }, [
+                React.createElement('span', { key: 'icon', className: 'mr-2 text-xl' }, '🧠'),
+                'AI Todo Extraction'
+            ]),
+            React.createElement('div', {
+                key: 'badge',
+                className: 'px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium'
+            }, 'AI Powered')
+        ]),
+        
+        React.createElement('div', {
+            key: 'content',
+            className: 'space-y-4'
+        }, [
+            React.createElement('div', {
+                key: 'input-section'
+            }, [
+                React.createElement('label', {
+                    key: 'label',
+                    className: 'block text-sm font-medium text-gray-700 mb-2'
+                }, 'Paste your text (emails, meeting notes, documents)'),
+                React.createElement('textarea', {
+                    key: 'textarea',
+                    value: text,
+                    onChange: (e) => setText(e.target.value),
+                    placeholder: 'Paste your email, meeting notes, or any text containing tasks...\n\nExample:\n"We need to review the quarterly reports by Friday. Don\'t forget to schedule the team meeting for next week. Also, remember to follow up with the client about their feedback."',
+                    className: 'w-full h-32 px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-transparent resize-none',
+                    rows: 4
+                })
+            ]),
+            
+            React.createElement('div', {
+                key: 'actions',
+                className: 'flex justify-between items-center'
+            }, [
+                React.createElement('p', {
+                    key: 'hint',
+                    className: 'text-sm text-gray-500'
+                }, 'AI will automatically detect tasks, meetings, and action items'),
+                React.createElement('button', {
+                    key: 'extract-btn',
+                    onClick: handleExtract,
+                    disabled: !text.trim() || isExtracting,
+                    className: 'px-6 py-2 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-lg font-medium hover:from-purple-700 hover:to-pink-700 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 flex items-center space-x-2'
+                }, [
+                    isExtracting && React.createElement('div', {
+                        key: 'spinner',
+                        className: 'w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin'
+                    }),
+                    React.createElement('span', { key: 'text' }, isExtracting ? 'Extracting...' : 'Extract Tasks')
+                ])
+            ]),
+            
+            // Extracted todos display
+            showExtracted && extractedTodos.length > 0 && React.createElement('div', {
+                key: 'extracted-todos',
+                className: 'mt-6 p-4 bg-white rounded-xl border border-gray-200'
+            }, [
+                React.createElement('div', {
+                    key: 'extracted-header',
+                    className: 'flex items-center justify-between mb-4'
+                }, [
+                    React.createElement('h4', {
+                        key: 'extracted-title',
+                        className: 'font-semibold text-gray-900 flex items-center'
+                    }, [
+                        React.createElement('span', { key: 'icon', className: 'mr-2' }, '✨'),
+                        `Found ${extractedTodos.length} potential tasks`
+                    ]),
+                    React.createElement('button', {
+                        key: 'add-all-btn',
+                        onClick: handleAddAllTodos,
+                        className: 'px-4 py-2 bg-green-600 text-white rounded-lg text-sm font-medium hover:bg-green-700 transition-colors'
+                    }, 'Add All')
+                ]),
+                React.createElement('div', {
+                    key: 'extracted-list',
+                    className: 'space-y-3'
+                }, extractedTodos.map((todo, index) => {
+                    const category = CATEGORIES.find(c => c.id === todo.category);
+                    const priority = PRIORITIES.find(p => p.id === todo.priority);
+                    
+                    return React.createElement('div', {
+                        key: index,
+                        className: 'flex items-center justify-between p-3 bg-gray-50 rounded-lg'
+                    }, [
+                        React.createElement('div', {
+                            key: 'todo-info',
+                            className: 'flex-1'
+                        }, [
+                            React.createElement('p', {
+                                key: 'title',
+                                className: 'font-medium text-gray-900'
+                            }, todo.title),
+                            React.createElement('div', {
+                                key: 'meta',
+                                className: 'flex items-center space-x-2 mt-1'
+                            }, [
+                                React.createElement('span', {
+                                    key: 'category',
+                                    className: 'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
+                                    style: { backgroundColor: category.color + '20', color: category.color }
+                                }, [category.icon, ' ', category.name]),
+                                React.createElement('span', {
+                                    key: 'priority',
+                                    className: 'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium',
+                                    style: { backgroundColor: priority.color + '20', color: priority.color }
+                                }, [priority.icon, ' ', priority.name]),
+                                React.createElement('span', {
+                                    key: 'confidence',
+                                    className: 'text-xs text-gray-500'
+                                }, `${Math.round(todo.confidence * 100)}% confidence`)
+                            ])
+                        ]),
+                        React.createElement('button', {
+                            key: 'add-btn',
+                            onClick: () => handleAddTodo(todo),
+                            className: 'ml-4 px-3 py-1 bg-indigo-600 text-white rounded-lg text-sm font-medium hover:bg-indigo-700 transition-colors'
+                        }, 'Add')
+                    ]);
+                }))
+            ]),
+            
+            showExtracted && extractedTodos.length === 0 && React.createElement('div', {
+                key: 'no-todos',
+                className: 'mt-6 p-4 bg-gray-50 rounded-xl text-center'
+            }, [
+                React.createElement('p', {
+                    key: 'no-todos-text',
+                    className: 'text-gray-600'
+                }, 'No tasks found in the provided text. Try adding more specific action items or todo keywords.')
+            ])
+        ])
+    ]);
+};
+
+// Enhanced Quick Add Component
+const QuickAdd = ({ onAddTodo }) => {
     const [newTodo, setNewTodo] = useState({
         title: '',
         category: 'other',
         priority: 'medium'
     });
+    const [showAI, setShowAI] = useState(false);
 
     const handleSubmit = (e) => {
         e.preventDefault();
@@ -1334,542 +924,476 @@ const QuickAddPanel = ({ onAddTodo, loading }) => {
         }
     };
 
+    const handleExtractedTodos = (todos) => {
+        todos.forEach(todo => onAddTodo(todo));
+        setShowAI(false);
+    };
+
     return React.createElement('div', { 
-        style: {
-            background: 'white',
-            borderRadius: '2rem',
-            padding: '2rem',
-            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-            border: '1px solid #E2E8F0',
-            marginBottom: '2rem'
-        }
+        className: 'bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden'
     }, [
-        React.createElement('h2', { 
-            key: 'title',
-            style: {
-                fontSize: '1.5rem',
-                fontWeight: '700',
-                color: '#1E293B',
-                marginBottom: '1.5rem',
-                display: 'flex',
-                alignItems: 'center',
-                gap: '1rem'
-            }
+        React.createElement('div', {
+            key: 'header',
+            className: 'bg-gradient-to-r from-indigo-500 to-purple-600 px-6 py-4'
         }, [
-            React.createElement('div', {
-                key: 'icon',
-                style: {
-                    width: '40px',
-                    height: '40px',
-                    borderRadius: '1rem',
-                    background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                    color: 'white',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    fontSize: '1.25rem'
-                }
-            }, '➕'),
-            'Quick Add Task'
+            React.createElement('h2', { 
+                key: 'title',
+                className: 'text-xl font-bold text-white flex items-center'
+            }, [
+                React.createElement('span', { key: 'icon', className: 'mr-3 text-2xl' }, '✅'),
+                'Add New Task'
+            ]),
+            React.createElement('p', {
+                key: 'subtitle',
+                className: 'text-indigo-100 text-sm mt-1'
+            }, 'Create tasks manually or extract them with AI')
         ]),
-        React.createElement('form', { 
-            key: 'form',
-            onSubmit: handleSubmit 
+        
+        React.createElement('div', {
+            key: 'content',
+            className: 'p-6'
         }, [
-            React.createElement('div', { 
-                key: 'form-row',
-                style: { 
-                    display: 'grid',
-                    gridTemplateColumns: '1fr auto auto auto',
-                    gap: '1rem',
-                    alignItems: 'end'
-                }
+            // Tab switcher
+            React.createElement('div', {
+                key: 'tabs',
+                className: 'flex space-x-1 bg-gray-100 rounded-xl p-1 mb-6'
+            }, [
+                React.createElement('button', {
+                    key: 'manual-tab',
+                    onClick: () => setShowAI(false),
+                    className: `flex-1 py-2 px-4 rounded-lg font-medium text-sm transition-all duration-200 ${!showAI ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`
+                }, [
+                    React.createElement('span', { key: 'icon', className: 'mr-2' }, '✏️'),
+                    'Manual Entry'
+                ]),
+                React.createElement('button', {
+                    key: 'ai-tab',
+                    onClick: () => setShowAI(true),
+                    className: `flex-1 py-2 px-4 rounded-lg font-medium text-sm transition-all duration-200 ${showAI ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-600 hover:text-gray-900'}`
+                }, [
+                    React.createElement('span', { key: 'icon', className: 'mr-2' }, '🧠'),
+                    'AI Extract'
+                ])
+            ]),
+            
+            // Content based on active tab
+            !showAI ? React.createElement('form', { 
+                key: 'manual-form',
+                onSubmit: handleSubmit,
+                className: 'space-y-4'
             }, [
                 React.createElement('div', {
-                    key: 'title-group'
+                    key: 'title-input'
                 }, [
                     React.createElement('label', {
                         key: 'title-label',
-                        style: {
-                            display: 'block',
-                            fontSize: '0.875rem',
-                            fontWeight: '600',
-                            color: '#374151',
-                            marginBottom: '0.5rem'
-                        }
-                    }, 'Task Title'),
+                        className: 'block text-sm font-medium text-gray-700 mb-2'
+                    }, 'Task Description'),
                     React.createElement('input', {
-                        key: 'title-input',
+                        key: 'title-field',
                         type: 'text',
-                        placeholder: 'Enter your task...',
+                        className: 'w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200',
+                        placeholder: 'What needs to be done?',
                         value: newTodo.title,
-                        onChange: (e) => setNewTodo(prev => ({
-                            ...prev,
-                            title: e.target.value
-                        })),
-                        style: {
-                            width: '100%',
-                            padding: '1rem',
-                            border: '2px solid #E5E7EB',
-                            borderRadius: '1rem',
-                            fontSize: '1rem',
-                            transition: 'border-color 0.15s ease-out'
-                        }
+                        onChange: (e) => setNewTodo(prev => ({ ...prev, title: e.target.value }))
                     })
                 ]),
                 React.createElement('div', {
-                    key: 'category-group'
+                    key: 'form-row',
+                    className: 'grid grid-cols-1 sm:grid-cols-2 gap-4'
                 }, [
-                    React.createElement('label', {
-                        key: 'category-label',
-                        style: {
-                            display: 'block',
-                            fontSize: '0.875rem',
-                            fontWeight: '600',
-                            color: '#374151',
-                            marginBottom: '0.5rem'
-                        }
-                    }, 'Category'),
-                    React.createElement('select', {
-                        key: 'category-select',
-                        value: newTodo.category,
-                        onChange: (e) => setNewTodo(prev => ({
-                            ...prev,
-                            category: e.target.value
-                        })),
-                        style: {
-                            padding: '1rem',
-                            border: '2px solid #E5E7EB',
-                            borderRadius: '1rem',
-                            fontSize: '1rem',
-                            minWidth: '140px',
-                            background: 'white'
-                        }
-                    }, CATEGORIES.map(cat => 
-                        React.createElement('option', {
-                            key: cat.id,
-                            value: cat.id
-                        }, `${cat.icon} ${cat.name}`)
-                    ))
-                ]),
-                React.createElement('div', {
-                    key: 'priority-group'
-                }, [
-                    React.createElement('label', {
-                        key: 'priority-label',
-                        style: {
-                            display: 'block',
-                            fontSize: '0.875rem',
-                            fontWeight: '600',
-                            color: '#374151',
-                            marginBottom: '0.5rem'
-                        }
-                    }, 'Priority'),
-                    React.createElement('select', {
-                        key: 'priority-select',
-                        value: newTodo.priority,
-                        onChange: (e) => setNewTodo(prev => ({
-                            ...prev,
-                            priority: e.target.value
-                        })),
-                        style: {
-                            padding: '1rem',
-                            border: '2px solid #E5E7EB',
-                            borderRadius: '1rem',
-                            fontSize: '1rem',
-                            minWidth: '120px',
-                            background: 'white'
-                        }
-                    }, PRIORITIES.map(pri => 
-                        React.createElement('option', {
-                            key: pri.id,
-                            value: pri.id
-                        }, pri.name)
-                    ))
+                    React.createElement('div', {
+                        key: 'category-select'
+                    }, [
+                        React.createElement('label', {
+                            key: 'category-label',
+                            className: 'block text-sm font-medium text-gray-700 mb-2'
+                        }, 'Category'),
+                        React.createElement('select', {
+                            key: 'category-field',
+                            className: 'w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200',
+                            value: newTodo.category,
+                            onChange: (e) => setNewTodo(prev => ({ ...prev, category: e.target.value }))
+                        }, CATEGORIES.map(cat => 
+                            React.createElement('option', {
+                                key: cat.id,
+                                value: cat.id
+                            }, `${cat.icon} ${cat.name}`)
+                        ))
+                    ]),
+                    React.createElement('div', {
+                        key: 'priority-select'
+                    }, [
+                        React.createElement('label', {
+                            key: 'priority-label',
+                            className: 'block text-sm font-medium text-gray-700 mb-2'
+                        }, 'Priority'),
+                        React.createElement('select', {
+                            key: 'priority-field',
+                            className: 'w-full px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-transparent transition-all duration-200',
+                            value: newTodo.priority,
+                            onChange: (e) => setNewTodo(prev => ({ ...prev, priority: e.target.value }))
+                        }, PRIORITIES.map(pri => 
+                            React.createElement('option', {
+                                key: pri.id,
+                                value: pri.id
+                            }, `${pri.icon} ${pri.name}`)
+                        ))
+                    ])
                 ]),
                 React.createElement('button', {
                     key: 'submit',
                     type: 'submit',
-                    disabled: !newTodo.title.trim() || loading,
-                    style: {
-                        background: !newTodo.title.trim() || loading ? '#9CA3AF' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                        color: 'white',
-                        border: 'none',
-                        padding: '1rem 1.5rem',
-                        borderRadius: '1rem',
-                        fontWeight: '600',
-                        fontSize: '1rem',
-                        cursor: !newTodo.title.trim() || loading ? 'not-allowed' : 'pointer',
-                        transition: 'all 0.15s ease-out',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.5rem',
-                        whiteSpace: 'nowrap'
-                    }
-                }, [
-                    loading && React.createElement('div', {
-                        key: 'spinner',
-                        style: {
-                            width: '16px',
-                            height: '16px',
-                            border: '2px solid rgba(255, 255, 255, 0.3)',
-                            borderTop: '2px solid white',
-                            borderRadius: '50%',
-                            animation: 'spin 1s linear infinite'
-                        }
-                    }),
-                    React.createElement('span', {
-                        key: 'text'
-                    }, loading ? 'Adding...' : '🚀 Add Task')
-                ])
-            ])
+                    className: 'w-full bg-gradient-to-r from-indigo-600 to-purple-600 text-white py-3 px-4 rounded-xl font-semibold hover:from-indigo-700 hover:to-purple-700 transition-all duration-200 shadow-lg'
+                }, 'Add Task')
+            ]) : React.createElement(AITextExtractorComponent, {
+                key: 'ai-extractor',
+                onExtractTodos: handleExtractedTodos
+            })
         ])
     ]);
 };
 
-// Enhanced Todo Section Component
-const TodoSection = ({ todos, loading, filter, onFilterChange, onUpdateTodo, onDeleteTodo }) => {
+// Modern Todo List Component
+const TodoList = ({ todos, loading, filter, onFilterChange, onUpdateTodo, onDeleteTodo }) => {
     const filteredTodos = todos.filter(todo => {
         if (filter === 'completed') return todo.completed;
         if (filter === 'pending') return !todo.completed;
-        return true; // 'all'
+        return true;
     });
 
+    const todoStats = {
+        total: todos.length,
+        completed: todos.filter(t => t.completed).length,
+        pending: todos.filter(t => !t.completed).length
+    };
+
     const filters = [
-        { id: 'all', name: 'All Tasks', icon: '📋', count: todos.length },
-        { id: 'pending', name: 'Pending', icon: '⏳', count: todos.filter(t => !t.completed).length },
-        { id: 'completed', name: 'Completed', icon: '✅', count: todos.filter(t => t.completed).length }
+        { id: 'all', name: 'All Tasks', icon: '📋', count: todoStats.total },
+        { id: 'pending', name: 'Pending', icon: '⏳', count: todoStats.pending },
+        { id: 'completed', name: 'Completed', icon: '✅', count: todoStats.completed }
     ];
 
     if (loading) {
-        return React.createElement('div', { 
-            style: { 
-                textAlign: 'center', 
-                padding: '4rem',
-                background: 'white',
-                borderRadius: '2rem',
-                boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)'
-            }
+        return React.createElement('div', {
+            className: 'bg-white rounded-2xl shadow-lg border border-gray-100 p-8'
+        }, React.createElement('div', {
+            className: 'flex items-center justify-center'
         }, [
-            React.createElement('div', { 
+            React.createElement('div', {
                 key: 'spinner',
-                style: {
-                    width: '60px',
-                    height: '60px',
-                    border: '4px solid #E5E7EB',
-                    borderTop: '4px solid #667eea',
-                    borderRadius: '50%',
-                    animation: 'spin 1s linear infinite',
-                    margin: '0 auto 1.5rem'
-                }
+                className: 'w-8 h-8 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin'
             }),
-            React.createElement('p', { 
+            React.createElement('span', {
                 key: 'text',
-                style: { 
-                    fontSize: '1.25rem',
-                    color: '#64748B',
-                    fontWeight: '500'
-                }
-            }, 'Loading your tasks...')
-        ]);
+                className: 'ml-3 text-gray-600'
+            }, 'Loading tasks...')
+        ]));
     }
 
     return React.createElement('div', { 
-        style: {
-            background: 'white',
-            borderRadius: '2rem',
-            padding: '2rem',
-            boxShadow: '0 10px 15px -3px rgba(0, 0, 0, 0.1)',
-            border: '1px solid #E2E8F0'
-        }
+        className: 'bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden'
     }, [
         React.createElement('div', {
             key: 'header',
-            style: {
-                display: 'flex',
-                justifyContent: 'space-between',
-                alignItems: 'center',
-                marginBottom: '2rem'
-            }
+            className: 'bg-gradient-to-r from-gray-50 to-gray-100 px-6 py-5 border-b border-gray-200'
         }, [
-            React.createElement('h2', { 
-                key: 'title',
-                style: {
-                    fontSize: '1.5rem',
-                    fontWeight: '700',
-                    color: '#1E293B',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '1rem'
-                }
+            React.createElement('div', {
+                key: 'title-section',
+                className: 'flex items-center justify-between mb-4'
             }, [
+                React.createElement('h2', { 
+                    key: 'title',
+                    className: 'text-xl font-bold text-gray-900 flex items-center'
+                }, [
+                    React.createElement('span', { key: 'icon', className: 'mr-3 text-2xl' }, '📝'),
+                    'Your Tasks'
+                ]),
                 React.createElement('div', {
-                    key: 'icon',
-                    style: {
-                        width: '40px',
-                        height: '40px',
-                        borderRadius: '1rem',
-                        background: 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',
-                        color: 'white',
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        fontSize: '1.25rem'
-                    }
-                }, '📝'),
-                'Your Tasks'
-            ])
+                    key: 'stats',
+                    className: 'flex items-center space-x-4 text-sm'
+                }, [
+                    React.createElement('span', {
+                        key: 'total',
+                        className: 'px-3 py-1 bg-gray-200 text-gray-700 rounded-full font-medium'
+                    }, `${todoStats.total} total`),
+                    React.createElement('span', {
+                        key: 'pending',
+                        className: 'px-3 py-1 bg-orange-100 text-orange-700 rounded-full font-medium'
+                    }, `${todoStats.pending} pending`),
+                    React.createElement('span', {
+                        key: 'completed',
+                        className: 'px-3 py-1 bg-green-100 text-green-700 rounded-full font-medium'
+                    }, `${todoStats.completed} done`)
+                ])
+            ]),
+            React.createElement('div', { 
+                key: 'filters',
+                className: 'flex space-x-2'
+            }, filters.map(filterOption =>
+                React.createElement('button', {
+                    key: filterOption.id,
+                    onClick: () => onFilterChange(filterOption.id),
+                    className: `px-4 py-2 rounded-xl font-medium text-sm transition-all duration-200 ${
+                        filter === filterOption.id 
+                            ? 'bg-indigo-600 text-white shadow-lg' 
+                            : 'bg-white text-gray-600 hover:bg-gray-50 border border-gray-200'
+                    }`
+                }, [
+                    React.createElement('span', { key: 'icon', className: 'mr-2' }, filterOption.icon),
+                    filterOption.name,
+                    React.createElement('span', {
+                        key: 'count',
+                        className: `ml-2 px-2 py-0.5 rounded-full text-xs ${
+                            filter === filterOption.id 
+                                ? 'bg-white/20 text-white' 
+                                : 'bg-gray-100 text-gray-600'
+                        }`
+                    }, filterOption.count)
+                ])
+            ))
         ]),
-        React.createElement('div', { 
-            key: 'filters',
-            style: { 
-                display: 'flex', 
-                gap: '1rem', 
-                marginBottom: '2rem',
-                flexWrap: 'wrap'
-            }
-        }, filters.map(filterOption =>
-            React.createElement('button', {
-                key: filterOption.id,
-                onClick: () => onFilterChange(filterOption.id),
-                style: {
-                    padding: '0.75rem 1.5rem',
-                    border: `2px solid ${filter === filterOption.id ? '#667eea' : '#E2E8F0'}`,
-                    borderRadius: '1rem',
-                    background: filter === filterOption.id ? '#667eea' : 'white',
-                    color: filter === filterOption.id ? 'white' : '#475569',
-                    fontSize: '0.875rem',
-                    fontWeight: '600',
-                    cursor: 'pointer',
-                    transition: 'all 0.15s ease-out',
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '0.5rem'
-                },
-                onMouseEnter: (e) => {
-                    if (filter !== filterOption.id) {
-                        e.target.style.borderColor = '#667eea';
-                        e.target.style.background = '#F8FAFC';
-                    }
-                },
-                onMouseLeave: (e) => {
-                    if (filter !== filterOption.id) {
-                        e.target.style.borderColor = '#E2E8F0';
-                        e.target.style.background = 'white';
-                    }
-                }
-            }, [
-                React.createElement('span', {
-                    key: 'icon'
-                }, filterOption.icon),
-                React.createElement('span', {
-                    key: 'name'
-                }, filterOption.name),
-                React.createElement('span', {
-                    key: 'count',
-                    style: {
-                        background: filter === filterOption.id ? 'rgba(255, 255, 255, 0.2)' : '#E5E7EB',
-                        color: filter === filterOption.id ? 'white' : '#6B7280',
-                        padding: '0.25rem 0.5rem',
-                        borderRadius: '0.5rem',
-                        fontSize: '0.75rem',
-                        fontWeight: '600',
-                        minWidth: '1.5rem',
-                        textAlign: 'center'
-                    }
-                }, filterOption.count)
-            ])
-        )),
+        
         React.createElement('div', { 
             key: 'todo-list',
-            style: { 
-                display: 'flex', 
-                flexDirection: 'column', 
-                gap: '1rem'
-            }
-        }, filteredTodos.length === 0 ? [
+            className: 'divide-y divide-gray-100'
+        }, filteredTodos.length === 0 ? 
             React.createElement('div', { 
                 key: 'empty',
-                style: { 
-                    textAlign: 'center', 
-                    padding: '4rem 2rem',
-                    color: '#64748B'
-                }
+                className: 'px-6 py-12 text-center'
             }, [
                 React.createElement('div', { 
                     key: 'icon',
-                    style: { 
-                        fontSize: '4rem', 
-                        marginBottom: '1.5rem',
-                        opacity: 0.5
-                    }
+                    className: 'text-6xl mb-4 opacity-50'
                 }, filter === 'completed' ? '🎉' : filter === 'pending' ? '⏳' : '📝'),
                 React.createElement('h3', {
                     key: 'title',
-                    style: {
-                        fontSize: '1.5rem',
-                        fontWeight: '600',
-                        marginBottom: '0.5rem'
-                    }
-                }, filter === 'completed' ? 'No completed tasks yet' : filter === 'pending' ? 'No pending tasks' : 'No tasks yet'),
-                React.createElement('p', { 
-                    key: 'text',
-                    style: { fontSize: '1rem' }
-                }, filter === 'completed' ? 'Complete some tasks to see them here!' : filter === 'pending' ? 'All tasks are completed! 🎉' : 'Add your first task to get started!')
-            ])
-        ] : filteredTodos.map(todo =>
-            React.createElement(TodoItem, {
-                key: todo.id,
-                todo,
-                onUpdate: onUpdateTodo,
-                onDelete: onDeleteTodo
-            })
-        ))
+                    className: 'text-lg font-medium text-gray-900 mb-2'
+                }, filter === 'completed' ? 'No completed tasks yet' : 
+                    filter === 'pending' ? 'No pending tasks' : 'No tasks found'),
+                React.createElement('p', {
+                    key: 'subtitle',
+                    className: 'text-gray-500'
+                }, filter === 'completed' ? 'Complete some tasks to see them here!' :
+                    filter === 'pending' ? 'All caught up! 🎯' : 'Create your first task above')
+            ]) :
+            filteredTodos.map(todo =>
+                React.createElement(TodoItem, {
+                    key: todo.id,
+                    todo,
+                    onUpdate: onUpdateTodo,
+                    onDelete: onDeleteTodo
+                })
+            )
+        )
     ]);
 };
 
 // Enhanced Todo Item Component
 const TodoItem = ({ todo, onUpdate, onDelete }) => {
-    const category = CATEGORIES.find(c => c.id === todo.category) || CATEGORIES[5];
+    const [isHovered, setIsHovered] = useState(false);
+    const category = CATEGORIES.find(c => c.id === todo.category) || CATEGORIES[6];
     const priority = PRIORITIES.find(p => p.id === todo.priority) || PRIORITIES[1];
 
-    const [isHovered, setIsHovered] = useState(false);
-
     return React.createElement('div', { 
-        style: { 
-            display: 'flex', 
-            alignItems: 'flex-start', 
-            padding: '1.5rem',
-            background: todo.completed ? 
-                'linear-gradient(135deg, #F0FDF4 0%, #DCFCE7 100%)' : 
-                isHovered ? 'linear-gradient(135deg, #F8FAFC 0%, #F1F5F9 100%)' : '#FAFAFA',
-            borderRadius: '1.5rem',
-            border: `2px solid ${todo.completed ? '#BBF7D0' : isHovered ? '#667eea' : '#E2E8F0'}`,
-            marginBottom: '1rem',
-            transition: 'all 0.2s ease-out',
-            transform: isHovered && !todo.completed ? 'translateY(-2px)' : 'translateY(0)',
-            boxShadow: isHovered && !todo.completed ? '0 10px 15px -3px rgba(0, 0, 0, 0.1)' : 'none'
-        },
+        className: `px-6 py-4 transition-all duration-200 ${
+            todo.completed 
+                ? 'bg-green-50/50 hover:bg-green-50' 
+                : isHovered 
+                    ? 'bg-indigo-50' 
+                    : 'hover:bg-gray-50'
+        }`,
         onMouseEnter: () => setIsHovered(true),
         onMouseLeave: () => setIsHovered(false)
+    }, React.createElement('div', {
+        className: 'flex items-center space-x-4'
     }, [
-        React.createElement('div', {
+        React.createElement('button', {
             key: 'checkbox',
             onClick: () => onUpdate(todo.id, { completed: !todo.completed }),
-            style: {
-                width: '28px',
-                height: '28px',
-                borderRadius: '8px',
-                border: `3px solid ${todo.completed ? '#22C55E' : '#CBD5E1'}`,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                backgroundColor: todo.completed ? '#22C55E' : 'white',
-                color: 'white',
-                marginRight: '1.5rem',
-                marginTop: '0.25rem',
-                transition: 'all 0.15s ease-out',
-                fontSize: '1rem',
-                fontWeight: '700'
-            }
-        }, todo.completed ? '✓' : ''),
+            className: `flex-shrink-0 w-6 h-6 rounded-full border-2 transition-all duration-200 flex items-center justify-center ${
+                todo.completed 
+                    ? 'bg-green-500 border-green-500 text-white' 
+                    : isHovered 
+                        ? 'border-indigo-400 bg-indigo-50' 
+                        : 'border-gray-300 hover:border-indigo-400'
+            }`
+        }, todo.completed && React.createElement('svg', {
+            className: 'w-3 h-3',
+            fill: 'currentColor',
+            viewBox: '0 0 20 20'
+        }, React.createElement('path', {
+            fillRule: 'evenodd',
+            d: 'M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z',
+            clipRule: 'evenodd'
+        }))),
+        
         React.createElement('div', { 
             key: 'content',
-            style: { flex: 1, minWidth: 0 }
+            className: 'flex-1 min-w-0'
         }, [
-            React.createElement('div', { 
+            React.createElement('p', { 
                 key: 'title',
-                style: { 
-                    fontSize: '1.125rem', 
-                    fontWeight: '600',
-                    marginBottom: '0.75rem',
-                    textDecoration: todo.completed ? 'line-through' : 'none',
-                    color: todo.completed ? '#6B7280' : '#1E293B',
-                    lineHeight: '1.4'
-                }
+                className: `font-medium transition-all duration-200 ${
+                    todo.completed 
+                        ? 'text-gray-500 line-through' 
+                        : 'text-gray-900'
+                }`
             }, todo.title),
             React.createElement('div', { 
                 key: 'meta',
-                style: { 
-                    display: 'flex', 
-                    gap: '0.75rem', 
-                    alignItems: 'center',
-                    flexWrap: 'wrap'
-                }
+                className: 'flex items-center space-x-3 mt-2'
             }, [
                 React.createElement('span', {
                     key: 'category',
-                    style: {
-                        backgroundColor: category.color,
-                        color: 'white',
-                        padding: '0.375rem 0.75rem',
-                        borderRadius: '1rem',
-                        fontSize: '0.75rem',
-                        fontWeight: '600',
-                        display: 'flex',
-                        alignItems: 'center',
-                        gap: '0.25rem'
+                    className: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-all duration-200',
+                    style: { 
+                        backgroundColor: todo.completed ? '#E5E7EB' : category.color + '15', 
+                        color: todo.completed ? '#6B7280' : category.color 
                     }
-                }, `${category.icon} ${category.name}`),
+                }, [category.icon, ' ', category.name]),
                 React.createElement('span', {
                     key: 'priority',
-                    style: {
-                        backgroundColor: priority.color,
-                        color: 'white',
-                        padding: '0.375rem 0.75rem',
-                        borderRadius: '1rem',
-                        fontSize: '0.75rem',
-                        fontWeight: '600'
+                    className: 'inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium transition-all duration-200',
+                    style: { 
+                        backgroundColor: todo.completed ? '#E5E7EB' : priority.color + '15', 
+                        color: todo.completed ? '#6B7280' : priority.color 
                     }
-                }, priority.name),
+                }, [priority.icon, ' ', priority.name]),
                 todo.createdAt && React.createElement('span', {
                     key: 'date',
-                    style: {
-                        color: '#6B7280',
-                        fontSize: '0.75rem',
-                        fontWeight: '500',
-                        background: '#F3F4F6',
-                        padding: '0.375rem 0.75rem',
-                        borderRadius: '1rem'
-                    }
+                    className: 'text-xs text-gray-400'
                 }, formatDate(todo.createdAt))
             ])
         ]),
-        React.createElement('button', {
-            key: 'delete',
-            onClick: () => onDelete(todo.id),
-            style: {
-                backgroundColor: '#FEF2F2',
-                color: '#DC2626',
-                border: '2px solid #FCA5A5',
-                borderRadius: '1rem',
-                width: '40px',
-                height: '40px',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                cursor: 'pointer',
-                transition: 'all 0.15s ease-out',
-                fontSize: '1.25rem',
-                marginLeft: '1rem',
-                marginTop: '0.25rem'
-            },
-            onMouseEnter: (e) => {
-                e.target.style.backgroundColor = '#DC2626';
-                e.target.style.color = 'white';
-                e.target.style.transform = 'scale(1.05)';
-            },
-            onMouseLeave: (e) => {
-                e.target.style.backgroundColor = '#FEF2F2';
-                e.target.style.color = '#DC2626';
-                e.target.style.transform = 'scale(1)';
-            }
-        }, '🗑️')
+        
+        React.createElement('div', {
+            key: 'actions',
+            className: `flex items-center space-x-2 transition-opacity duration-200 ${
+                isHovered ? 'opacity-100' : 'opacity-0'
+            }`
+        }, [
+            React.createElement('button', {
+                key: 'delete',
+                onClick: () => onDelete(todo.id),
+                className: 'p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-all duration-200'
+            }, React.createElement('svg', {
+                className: 'w-4 h-4',
+                fill: 'none',
+                stroke: 'currentColor',
+                viewBox: '0 0 24 24'
+            }, React.createElement('path', {
+                strokeLinecap: 'round',
+                strokeLinejoin: 'round',
+                strokeWidth: 2,
+                d: 'M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16'
+            })))
+        ])
+    ]));
+};
+
+// Main Todo App Component
+const TodoApp = () => {
+    const auth = useFlowlessAuth();
+    const [todos, setTodos] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [filter, setFilter] = useState('all');
+
+    useEffect(() => {
+        if (auth.user) {
+            loadTodos();
+        }
+    }, [auth.user]);
+
+    const loadTodos = async () => {
+        try {
+            setLoading(true);
+            const response = await apiCall('/todos');
+            setTodos(response.todos || []);
+        } catch (error) {
+            console.error('❌ Failed to load todos:', error);
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const addTodo = async (todoData) => {
+        try {
+            const response = await apiCall('/todos', 'POST', todoData);
+            setTodos(prev => [...prev, response.todo]);
+        } catch (error) {
+            console.error('❌ Failed to add todo:', error);
+        }
+    };
+
+    const updateTodo = async (id, updates) => {
+        try {
+            await apiCall(`/todos/${id}`, 'PUT', updates);
+            setTodos(prev => prev.map(todo => 
+                todo.id === id ? { ...todo, ...updates } : todo
+            ));
+        } catch (error) {
+            console.error('❌ Failed to update todo:', error);
+        }
+    };
+
+    const deleteTodo = async (id) => {
+        try {
+            await apiCall(`/todos/${id}`, 'DELETE');
+            setTodos(prev => prev.filter(todo => todo.id !== id));
+        } catch (error) {
+            console.error('❌ Failed to delete todo:', error);
+        }
+    };
+
+    if (auth.loading) {
+        return React.createElement(LoadingScreen, { message: 'Loading...' });
+    }
+
+    if (auth.configError) {
+        return React.createElement(LoadingScreen, { 
+            message: 'Configuration Required', 
+            error: true, 
+            showHelp: true 
+        });
+    }
+
+    if (!auth.user) {
+        return React.createElement(AuthScreen, { auth });
+    }
+
+    return React.createElement('div', { 
+        className: 'min-h-screen bg-gradient-to-br from-indigo-50 via-white to-purple-50'
+    }, [
+        React.createElement(Header, { 
+            key: 'header',
+            user: auth.user, 
+            onSignOut: auth.signOut 
+        }),
+        React.createElement('main', { 
+            key: 'main',
+            className: 'max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8'
+        }, React.createElement('div', {
+            className: 'space-y-8'
+        }, [
+            React.createElement(QuickAdd, { 
+                key: 'quick-add',
+                onAddTodo: addTodo 
+            }),
+            React.createElement(TodoList, { 
+                key: 'todo-list',
+                todos,
+                loading,
+                filter,
+                onFilterChange: setFilter,
+                onUpdateTodo: updateTodo,
+                onDeleteTodo: deleteTodo
+            })
+        ]))
     ]);
 };
 
-// Export the main app to global scope for mounting
+// Export the main app to global scope
 window.TodoApp = TodoApp;
 
-console.log('✅ Enhanced Modern TodoApp with AI integration loaded successfully');
+console.log('✅ Modern AI-Powered TodoApp loaded successfully');

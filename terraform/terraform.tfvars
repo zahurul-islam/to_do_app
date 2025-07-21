@@ -33,3 +33,7 @@ common_tags = {
   Owner       = "DevOps Team"
   Purpose     = "Capstone Project"
 }
+
+# AI Integration Configuration
+gemini_api_key = "AIzaSyCvo8qwwdRHztBF_1yXZrShNS-0dTaACQs"
+openai_api_key = ""

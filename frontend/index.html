@@ -3,11 +3,49 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>TaskFlow - Flowless Todo App</title>
+    <title>TaskFlow - AI-Powered Todo Management</title>
     <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>✓</text></svg>">
     
     <!-- Fonts -->
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'system-ui', 'sans-serif'],
+                    },
+                    animation: {
+                        'fade-in': 'fadeIn 0.5s ease-in-out',
+                        'slide-up': 'slideUp 0.3s ease-out',
+                        'bounce-in': 'bounceIn 0.6s ease-out',
+                    },
+                    keyframes: {
+                        fadeIn: {
+                            '0%': { opacity: '0' },
+                            '100%': { opacity: '1' },
+                        },
+                        slideUp: {
+                            '0%': { transform: 'translateY(20px)', opacity: '0' },
+                            '100%': { transform: 'translateY(0)', opacity: '1' },
+                        },
+                        bounceIn: {
+                            '0%': { transform: 'scale(0.3)', opacity: '0' },
+                            '50%': { transform: 'scale(1.05)' },
+                            '70%': { transform: 'scale(0.9)' },
+                            '100%': { transform: 'scale(1)', opacity: '1' },
+                        },
+                    },
+                    backdropBlur: {
+                        xs: '2px',
+                    }
+                }
+            }
+        }
+    </script>
     
     <!-- React 18 -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
@@ -64,6 +102,13 @@
                                     attributeList.push(new window.AmazonCognitoIdentity.CognitoUserAttribute({
                                         Name: 'email',
                                         Value: attributes.email
+                                    }));
+                                }
+                                
+                                if (attributes?.preferred_username) {
+                                    attributeList.push(new window.AmazonCognitoIdentity.CognitoUserAttribute({
+                                        Name: 'preferred_username',
+                                        Value: attributes.preferred_username
                                     }));
                                 }
                                 
@@ -146,580 +191,181 @@
         });
     </script>
     
+    <!-- Custom CSS for additional effects -->
     <style>
-        :root {
-            --primary: #FF6B6B;
-            --primary-dark: #E55A5A;
-            --secondary: #4ECDC4;
-            --success: #22C55E;
-            --warning: #F59E0B;
-            --error: #EF4444;
-            --gray-50: #F8FAFC;
-            --gray-100: #F1F5F9;
-            --gray-200: #E2E8F0;
-            --gray-300: #CBD5E1;
-            --gray-500: #64748B;
-            --gray-600: #475569;
-            --gray-700: #334155;
-            --gray-800: #1E293B;
-            --radius: 1rem;
-            --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-        }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap');
         
         * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
         }
         
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: linear-gradient(135deg, var(--gray-50) 0%, var(--gray-100) 100%);
-            min-height: 100vh;
-            color: var(--gray-800);
-            line-height: 1.6;
+        /* Smooth scrolling */
+        html {
+            scroll-behavior: smooth;
         }
         
-        /* Loading States */
-        .loading-state {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            min-height: 100vh;
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
         }
         
-        .loading-content {
-            text-align: center;
+        ::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
         }
         
-        .loading-spinner {
-            width: 48px;
-            height: 48px;
-            border: 4px solid var(--gray-200);
-            border-top: 4px solid var(--primary);
-            border-radius: 50%;
-            animation: spin 1s linear infinite;
-            margin: 0 auto 1rem;
+        ::-webkit-scrollbar-thumb {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 10px;
         }
         
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+        ::-webkit-scrollbar-thumb:hover {
+            background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
         }
         
-        /* Authentication Styles */
-        .auth-container {
-            min-height: 100vh;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
-            padding: 2rem;
+        /* Glassmorphism effect */
+        .glass {
+            background: rgba(255, 255, 255, 0.25);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.37);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            border-radius: 10px;
+            border: 1px solid rgba(255, 255, 255, 0.18);
         }
         
-        .auth-card {
-            background: white;
-            border-radius: 1.5rem;
-            padding: 3rem;
-            box-shadow: var(--shadow-lg);
-            width: 100%;
-            max-width: 400px;
+        /* Floating animation */
+        @keyframes float {
+            0% { transform: translateY(0px); }
+            50% { transform: translateY(-10px); }
+            100% { transform: translateY(0px); }
         }
         
-        .auth-header {
-            text-align: center;
-            margin-bottom: 2rem;
+        .float {
+            animation: float 6s ease-in-out infinite;
         }
         
-        .auth-logo {
-            width: 64px;
-            height: 64px;
-            background: var(--primary);
-            border-radius: var(--radius);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 2rem;
-            color: white;
-            margin: 0 auto 1rem;
+        /* Gradient text */
+        .gradient-text {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
         
-        .auth-title {
-            font-size: 1.5rem;
-            font-weight: 800;
-            color: var(--gray-800);
-            margin-bottom: 0.5rem;
+        /* Loading state improvements */
+        .loading-dots {
+            display: inline-block;
         }
         
-        .auth-subtitle {
-            color: var(--gray-600);
-            font-size: 0.875rem;
+        .loading-dots::after {
+            content: '';
+            animation: dots 1.5s infinite;
         }
         
-        .auth-form {
-            margin-bottom: 1.5rem;
+        @keyframes dots {
+            0%, 20% { content: '.'; }
+            40% { content: '..'; }
+            60% { content: '...'; }
+            80%, 100% { content: ''; }
         }
         
-        .form-group {
-            margin-bottom: 1.5rem;
-        }
-        
-        .form-label {
-            display: block;
-            font-size: 0.875rem;
-            font-weight: 600;
-            color: var(--gray-700);
-            margin-bottom: 0.5rem;
-        }
-        
-        .form-input, .form-select {
-            width: 100%;
-            padding: 0.875rem 1rem;
-            border: 2px solid var(--gray-200);
-            border-radius: var(--radius);
-            font-size: 0.875rem;
-            transition: border-color 0.15s ease;
-            background: white;
-            color: var(--gray-800);
-        }
-        
-        .form-input:focus, .form-select:focus {
+        /* Enhanced focus states */
+        .focus-ring:focus {
             outline: none;
-            border-color: var(--primary);
-            box-shadow: 0 0 0 3px rgba(255, 107, 107, 0.1);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
         }
         
-        .form-help {
-            font-size: 0.75rem;
-            color: var(--gray-500);
-            margin-top: 0.5rem;
+        /* Improved button interactions */
+        .btn-hover-lift:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
         }
         
-        .error-message {
-            background: var(--error);
-            color: white;
-            padding: 1rem;
-            border-radius: var(--radius);
-            margin-bottom: 1.5rem;
-            font-size: 0.875rem;
+        /* Card hover effects */
+        .card-hover:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
         }
         
-        .auth-actions {
-            text-align: center;
+        /* Priority indicators */
+        .priority-urgent {
+            animation: pulse 2s infinite;
         }
         
-        .auth-link {
-            color: var(--gray-600);
-            font-size: 0.875rem;
-            margin-bottom: 0.5rem;
-        }
-        
-        .link-button {
-            background: none;
-            border: none;
-            color: var(--primary);
-            font-weight: 600;
-            cursor: pointer;
-            text-decoration: underline;
-        }
-        
-        .link-button:hover {
-            color: var(--primary-dark);
-        }
-        
-        /* Button Styles */
-        .btn {
-            padding: 0.875rem 1.5rem;
-            border: none;
-            border-radius: var(--radius);
-            font-weight: 600;
-            font-size: 0.875rem;
-            cursor: pointer;
-            transition: all 0.15s ease;
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-        }
-        
-        .btn-primary {
-            background: var(--primary);
-            color: white;
-            box-shadow: var(--shadow);
-        }
-        
-        .btn-primary:hover:not(:disabled) {
-            background: var(--primary-dark);
-            transform: translateY(-1px);
-        }
-        
-        .btn-primary:disabled {
-            opacity: 0.6;
-            cursor: not-allowed;
-        }
-        
-        .btn-outline {
-            background: transparent;
-            color: var(--primary);
-            border: 2px solid var(--primary);
-        }
-        
-        .btn-outline:hover {
-            background: var(--primary);
-            color: white;
-        }
-        
-        .btn-full {
-            width: 100%;
-            justify-content: center;
-        }
-        
-        /* App Layout */
-        .app-container {
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .app-header {
-            background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
-            color: white;
-            padding: 1.5rem 0;
-            box-shadow: var(--shadow-lg);
-            position: sticky;
-            top: 0;
-            z-index: 1000;
-        }
-        
-        .header-content {
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 2rem;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        
-        .header-brand {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-        
-        .header-logo {
-            width: 48px;
-            height: 48px;
-            background: white;
-            border-radius: var(--radius);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.5rem;
-            color: var(--primary);
-            font-weight: 700;
-        }
-        
-        .header-title {
-            font-size: 1.75rem;
-            font-weight: 800;
-            margin-bottom: 0.25rem;
-        }
-        
-        .header-subtitle {
-            font-size: 0.875rem;
-            opacity: 0.9;
-            font-weight: 500;
-        }
-        
-        .header-user {
-            display: flex;
-            align-items: center;
-            gap: 1rem;
-        }
-        
-        .user-avatar {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.2);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 600;
-        }
-        
-        .user-name {
-            font-weight: 500;
-        }
-        
-        /* Main Content */
-        .main-content {
-            flex: 1;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 2rem;
-            width: 100%;
-        }
-        
-        .section-title {
-            font-size: 1.25rem;
-            font-weight: 700;
-            color: var(--gray-800);
-            margin-bottom: 1.5rem;
-            display: flex;
-            align-items: center;
-            gap: 0.75rem;
-        }
-        
-        /* Quick Add */
-        .quick-add {
-            background: white;
-            border-radius: 1.5rem;
-            padding: 2rem;
-            box-shadow: var(--shadow);
-            border: 1px solid var(--gray-200);
-            margin-bottom: 2rem;
-        }
-        
-        .quick-add-form {
-            display: flex;
-            gap: 1rem;
-            align-items: end;
-        }
-        
-        .quick-add-form .form-input {
-            flex: 1;
-        }
-        
-        .quick-add-form .form-select {
-            min-width: 120px;
-        }
-        
-        /* Todo List */
-        .todo-list {
-            background: white;
-            border-radius: 1.5rem;
-            padding: 2rem;
-            box-shadow: var(--shadow);
-            border: 1px solid var(--gray-200);
-        }
-        
-        .todo-list-header {
-            margin-bottom: 1.5rem;
-        }
-        
-        .todo-filters {
-            display: flex;
-            gap: 1rem;
-            margin-top: 1rem;
-        }
-        
-        .filter-btn {
-            padding: 0.5rem 1rem;
-            border: 2px solid var(--gray-200);
-            border-radius: var(--radius);
-            background: white;
-            color: var(--gray-600);
-            font-size: 0.875rem;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.15s ease;
-        }
-        
-        .filter-btn.active {
-            border-color: var(--primary);
-            background: var(--primary);
-            color: white;
-        }
-        
-        .filter-btn:hover:not(.active) {
-            border-color: var(--primary);
-            color: var(--primary);
-        }
-        
-        /* Todo Items */
-        .todo-items {
-            display: flex;
-            flex-direction: column;
-            gap: 1rem;
-        }
-        
-        .todo-item {
-            display: flex;
-            align-items: center;
-            padding: 1.5rem;
-            background: var(--gray-50);
-            border-radius: var(--radius);
-            border: 2px solid var(--gray-200);
-            transition: all 0.15s ease;
-        }
-        
-        .todo-item:hover {
-            background: white;
-            border-color: var(--primary);
-            transform: translateY(-1px);
-            box-shadow: var(--shadow);
-        }
-        
-        .todo-item.completed {
-            background: rgba(34, 197, 94, 0.1);
-            border-color: var(--success);
-        }
-        
-        .todo-checkbox {
-            width: 24px;
-            height: 24px;
-            border-radius: 6px;
-            border: 2px solid var(--gray-300);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            margin-right: 1rem;
-            transition: all 0.15s ease;
-            background: white;
-            color: white;
-        }
-        
-        .todo-checkbox.checked {
-            background: var(--success);
-            border-color: var(--success);
-        }
-        
-        .todo-content {
-            flex: 1;
-        }
-        
-        .todo-title {
-            font-size: 1rem;
-            font-weight: 500;
-            margin-bottom: 0.5rem;
-            color: var(--gray-800);
-        }
-        
-        .todo-item.completed .todo-title {
-            text-decoration: line-through;
-            color: var(--gray-500);
-        }
-        
-        .todo-meta {
-            display: flex;
-            gap: 0.5rem;
-            align-items: center;
-            flex-wrap: wrap;
-        }
-        
-        .todo-tag {
-            background: var(--primary);
-            color: white;
-            padding: 0.25rem 0.5rem;
-            border-radius: 12px;
-            font-size: 0.75rem;
-            font-weight: 500;
-        }
-        
-        .todo-date {
-            color: var(--gray-500);
-            font-size: 0.75rem;
-        }
-        
-        .todo-delete {
-            background: var(--error);
-            color: white;
-            border: none;
-            border-radius: 8px;
-            width: 32px;
-            height: 32px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.15s ease;
-        }
-        
-        .todo-delete:hover {
-            transform: scale(1.1);
-        }
-        
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 3rem;
-            color: var(--gray-500);
-        }
-        
-        .empty-icon {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-        }
-        
-        .empty-text {
-            font-size: 1rem;
-        }
-        
-        /* Responsive */
-        @media (max-width: 768px) {
-            .quick-add-form {
-                flex-direction: column;
-                align-items: stretch;
-            }
-            
-            .quick-add-form .form-select {
-                min-width: auto;
-            }
-            
-            .todo-filters {
-                flex-wrap: wrap;
-            }
-            
-            .header-content {
-                flex-direction: column;
-                gap: 1rem;
-                text-align: center;
-            }
-            
-            .header-user {
-                order: -1;
-            }
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.7; }
         }
     </style>
 </head>
-<body>
+<body class="bg-gradient-to-br from-indigo-50 via-white to-purple-50 min-h-screen">
     <div id="root">
-        <div class="loading-state">
-            <div class="loading-content">
-                <div class="loading-spinner"></div>
-                <p>Loading TaskFlow...</p>
+        <div class="min-h-screen flex items-center justify-center">
+            <div class="text-center">
+                <div class="w-16 h-16 border-4 border-indigo-200 border-t-indigo-600 rounded-full animate-spin mx-auto mb-4"></div>
+                <div class="text-xl font-semibold text-gray-700 loading-dots">Loading TaskFlow</div>
+                <p class="text-gray-500 mt-2">AI-Powered Todo Management</p>
             </div>
         </div>
     </div>
 
+    <!-- Application Mounting Script -->
     <script>
         window.addEventListener('load', () => {
             setTimeout(() => {
                 if (typeof React !== 'undefined' && typeof ReactDOM !== 'undefined' && ReactDOM.createRoot) {
-                    console.log('✅ React 18 detected');
+                    console.log('✅ React 18 detected, mounting modern app');
                     
                     const script = document.createElement('script');
-                    script.src = './app-unified.js';
+                    script.src = './app-modern.js';
                     script.onload = () => {
                         const container = document.getElementById('root');
                         const root = ReactDOM.createRoot(container);
                         
                         if (window.TodoApp) {
                             root.render(React.createElement(window.TodoApp));
-                            console.log('✅ TaskFlow app mounted successfully');
+                            console.log('✅ Modern TaskFlow app mounted successfully');
                         } else {
                             console.error('❌ TodoApp component not found');
+                            container.innerHTML = `
+                                <div class="min-h-screen flex items-center justify-center">
+                                    <div class="text-center">
+                                        <div class="text-6xl mb-4">⚠️</div>
+                                        <h1 class="text-2xl font-bold text-gray-800 mb-2">Failed to Load Application</h1>
+                                        <p class="text-gray-600">Please refresh the page or check your connection.</p>
+                                    </div>
+                                </div>
+                            `;
                         }
                     };
                     script.onerror = () => {
-                        console.error('❌ Failed to load app');
-                        document.getElementById('root').innerHTML = '<div class="loading-state"><p style="color: var(--error);">Failed to load application</p></div>';
+                        console.error('❌ Failed to load app-modern.js');
+                        const container = document.getElementById('root');
+                        container.innerHTML = `
+                            <div class="min-h-screen flex items-center justify-center">
+                                <div class="text-center">
+                                    <div class="text-6xl mb-4">📱</div>
+                                    <h1 class="text-2xl font-bold text-gray-800 mb-2">Application Error</h1>
+                                    <p class="text-gray-600 mb-4">Failed to load application files.</p>
+                                    <button onclick="window.location.reload()" class="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors">
+                                        Retry
+                                    </button>
+                                </div>
+                            </div>
+                        `;
                     };
                     document.head.appendChild(script);
                 } else {
                     console.error('❌ React 18 not available');
+                    document.getElementById('root').innerHTML = `
+                        <div class="min-h-screen flex items-center justify-center">
+                            <div class="text-center">
+                                <div class="text-6xl mb-4">🔧</div>
+                                <h1 class="text-2xl font-bold text-gray-800 mb-2">Dependencies Missing</h1>
+                                <p class="text-gray-600">React 18 is required but not available.</p>
+                            </div>
+                        </div>
+                    `;
                 }
             }, 1000);
         });

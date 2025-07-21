@@ -150,12 +150,14 @@ resource "aws_cognito_user_pool_client" "main" {
   # Read and write attributes
   read_attributes = [
     "email",
-    "name"
+    "name",
+    "preferred_username"
   ]
 
   write_attributes = [
     "email",
-    "name"
+    "name",
+    "preferred_username"
   ]
 
   # OAuth configuration for future extensibility
@@ -216,7 +218,7 @@ resource "aws_cognito_identity_pool" "main" {
 
 # IAM role for authenticated users
 resource "aws_iam_role" "cognito_authenticated_role" {
-  name = "taskflow-cognito-authenticated-role-${var.environment}"
+  name = "taskflow-cognito-authenticated-role-${var.environment}-${random_string.suffix.result}"
 
   assume_role_policy = jsonencode({
     Version = "2012-10-17"
@@ -247,7 +249,7 @@ resource "aws_iam_role" "cognito_authenticated_role" {
 
 # Enhanced policy for authenticated users
 resource "aws_iam_policy" "cognito_authenticated_policy" {
-  name        = "taskflow-cognito-authenticated-policy"
+  name        = "taskflow-cognito-authenticated-policy-${random_string.suffix.result}"
   description = "Policy for authenticated TaskFlow users"
 
   policy = jsonencode({
