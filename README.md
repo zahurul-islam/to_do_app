@@ -118,7 +118,7 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 ## 📞 Contact
 
-[Your Name] - [Your Email]
+Mohammad Zahurul Islam - zaisbd@gmail.com
 
 Project Link: [https://github.com/zahurul-islam/to_do_app](https://github.com/zahurul-islam/to_do_app)
 
