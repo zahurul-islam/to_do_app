@@ -120,4 +120,23 @@ This project is licensed under the MIT License. See the [LICENSE](LICENSE) file 
 
 [Your Name] - [Your Email]
 
-Project Link: [https://github.com/your-username/your-repo](https://github.com/your-username/your-repo)
+Project Link: [https://github.com/zahurul-islam/to_do_app](https://github.com/zahurul-islam/to_do_app)
+
+## 💰 Cost Analysis
+
+This project is designed to be cost-effective and, for the most part, operate within the AWS Free Tier for typical usage. However, it's important to understand the potential costs if usage exceeds the Free Tier limits.
+
+| Service | Free Tier | Estimated Cost (Beyond Free Tier) | Notes |
+| :--- | :--- | :--- | :--- |
+| **AWS Lambda** | 1 million requests/month, 400,000 GB-seconds of compute time | $0.20 per 1M requests, $0.00001667 per GB-second | The cost is highly dependent on the number of requests and the execution time of the Lambda functions. |
+| **Amazon API Gateway** | 1 million HTTP API calls/month | $1.00 per million calls | The cost is directly proportional to the number of API calls. |
+| **Amazon DynamoDB** | 25 GB of storage, 25 WCUs, 25 RCUs | $0.25 per GB-month, $1.25 per WCU-month, $0.25 per RCU-month | Costs will increase with the amount of data stored and the number of read/write operations. |
+| **Amazon Cognito** | 50,000 MAUs (monthly active users) | $0.0055 per MAU | Costs are based on the number of monthly active users. |
+| **AWS Amplify** | 1,000 build minutes/month, 5 GB storage, 15 GB data transfer | $0.01 per build minute, $0.023 per GB stored, $0.15 per GB transferred | Costs are primarily driven by build times and data transfer. |
+| **Amazon S3** | 5 GB of standard storage, 20,000 Get Requests, 2,000 Put Requests | $0.023 per GB-month (standard storage) | Used for hosting the frontend application. |
+| **Amazon CloudFront** | 1 TB of data transfer out, 10,000,000 HTTP/HTTPS requests | $0.085 per GB for the first 10 TB | Used to distribute the frontend content globally. |
+| **Amazon CloudWatch** | 10 custom metrics, 10 alarms, 1M API requests | $0.30 per metric/month, $0.10 per alarm/month | Used for monitoring, logging, and alarms. |
+| **AWS Secrets Manager** | | $0.40 per secret per month | Used to store the Gemini and OpenAI API keys. |
+| **Total Estimated Monthly Cost** | **~$0.00 (within Free Tier)** | **Variable (dependent on usage)** | |
+
+**Note:** These are estimates and can vary based on your specific usage patterns and AWS region. It's recommended to set up AWS Budgets to monitor your costs and avoid unexpected charges.(https://github.com/your-username/your-repo)
