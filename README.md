@@ -139,4 +139,4 @@ This project is designed to be cost-effective and, for the most part, operate wi
 | **AWS Secrets Manager** | | $0.40 per secret per month | Used to store the Gemini and OpenAI API keys. |
 | **Total Estimated Monthly Cost** | **~$0.00 (within Free Tier)** | **Variable (dependent on usage)** | |
 
-**Note:** These are estimates and can vary based on your specific usage patterns and AWS region. It's recommended to set up AWS Budgets to monitor your costs and avoid unexpected charges.(https://github.com/your-username/your-repo)
+**Note:** These are estimates and can vary based on your specific usage patterns and AWS region. It's recommended to set up AWS Budgets to monitor your costs and avoid unexpected charges.
