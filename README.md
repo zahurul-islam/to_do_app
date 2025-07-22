@@ -1,8 +1,8 @@
-# Serverless Todo Application
+# TaskFlow: An AI-Powered To-Do App
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-A comprehensive, serverless to-do web application built on AWS. This project serves as a practical demonstration of modern cloud architecture, infrastructure as code, and DevOps principles. It is a fully functional, scalable, and secure to-do management system, designed to be cost-effective by operating entirely within the AWS Free Tier.
+TaskFlow is an AI-powered, serverless to-do web application built on AWS. This project serves as a practical demonstration of modern cloud architecture, infrastructure as code, and DevOps principles. It is a fully functional, scalable, and secure to-do management system, designed to be cost-effective by operating entirely within the AWS Free Tier.
 
 ![Architecture Diagram](architecture.png)
 
